@@ -4,3 +4,6 @@
 [submodule "vendor/Building2Building"]
 	path = vendor/Building2Building
 	url = git@github.com:vtaboga/Building2Building.git
+[submodule "vendor/rl_x"]
+	path = vendor/rl_x
+	url = https://github.com/nico-bohlinger/RL-X.git

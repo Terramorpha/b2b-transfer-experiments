@@ -16,12 +16,21 @@
       "note": "content-identical to the old e186d8a / a3bfc9f (thermal-adjacency), re-applied on current upstream",
       "submodule": "vendor/Building2Building"
     },
+    "rl_x": {
+      "url": "https://github.com/nico-bohlinger/RL-X.git",
+      "commit": "70e220ac7eaf7b14ff4e0660227185a4628791b4",
+      "submodule": "vendor/rl_x",
+      "note": "morel's one_policy_to_run_them_all needs RL-X as an editable path dep (../rl_x); pinned here as a submodule (morel itself does not pin it by commit)"
+    },
     "hf_dataset": {
       "repo": "vtaboga/building2building_dataset",
       "revision": "b879e1794a0751f91c0558a0b98cf7a84c702cbd",
       "pinned_by": "scripts/_pin_dataset.py"
     },
-    "energyplus": "provided via guix at runtime (ENERGYPLUS_PATH); RECORD EXACT VERSION BEFORE PUBLISHING"
+    "energyplus": {
+      "version": "25.1.0",
+      "provider": "guix (ENERGYPLUS_PATH points at the install root, e.g. /gnu/store/<hash>-energyplus-25.1.0)"
+    }
   },
   "config": {
     "building_types": ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall"],

@@ -9,7 +9,10 @@
 REPO  := $(CURDIR)
 MOREL := $(REPO)/vendor/morel
 PY    := $(MOREL)/.venv/bin/python
-export PYTHONPATH := $(MOREL):$(REPO)/vendor/Building2Building
+# The scripts self-insert the vendor/* paths they need (morel root modules /
+# b2b's baselines/); building2building itself comes from the installed env, so
+# we deliberately do NOT put vendor/Building2Building on PYTHONPATH globally --
+# that would shadow the installed package with the un-built source tree.
 
 SEEDS := 0 1 2
 
@@ -18,9 +21,10 @@ SEEDS := 0 1 2
 help:
 	@grep -E '^[a-z].*:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/'
 
-setup:            ## init submodules + build morel's pinned env (needs uv + EnergyPlus)
+setup:            ## init submodules + build morel's pinned env (needs uv + guix runtime)
 	git submodule update --init --recursive
-	cd $(MOREL) && uv sync
+	cd $(MOREL) && uv sync --all-packages   # --all-packages: install every third_party/* workspace member
+	cd $(MOREL) && uv pip install pyarrow   # b2b reads its dataset metadata as parquet but doesn't declare pyarrow
 
 # --- reproduce the FIGURE from the archived checkpoints (fast, no training) ---
 baseline:         ## RBC baseline on the 672-step chunk -> data/baseline_chunk.csv
