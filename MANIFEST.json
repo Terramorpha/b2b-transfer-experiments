@@ -1,0 +1,45 @@
+{
+  "experiment": "cross-morphology transfer (Amorpheus, cold-start + resampling)",
+  "description": "One Amorpheus policy trained across 4 heterogeneous building types, evaluated zero-shot on held-out test-split buildings of those same types, over the first-672-step chunk it trained on.",
+  "pins": {
+    "morel": {
+      "url": "git@github.com:Terramorpha/morel.git",
+      "commit": "139c79c503a484aca91a62006c27e4adff2bdf2d",
+      "tag": "transfer-experiment-v1",
+      "submodule": "vendor/morel"
+    },
+    "building2building": {
+      "url": "git@github.com:vtaboga/Building2Building.git",
+      "commit": "b4350155c7d2fb15e805c0370f41b4921a3dd29b",
+      "tag": "transfer-experiment-v1",
+      "branch": "feature/adjacency",
+      "note": "content-identical to the old e186d8a / a3bfc9f (thermal-adjacency), re-applied on current upstream",
+      "submodule": "vendor/Building2Building"
+    },
+    "hf_dataset": {
+      "repo": "vtaboga/building2building_dataset",
+      "revision": "b879e1794a0751f91c0558a0b98cf7a84c702cbd",
+      "pinned_by": "scripts/_pin_dataset.py"
+    },
+    "energyplus": "provided via guix at runtime (ENERGYPLUS_PATH); RECORD EXACT VERSION BEFORE PUBLISHING"
+  },
+  "config": {
+    "building_types": ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall"],
+    "task": "task_occ_e0",
+    "loop": "cold_start + resampling",
+    "total_iterations": 400,
+    "resample_interval": 10,
+    "n_buildings_per_type": 10,
+    "chunk_steps": 672,
+    "seeds": [0, 1, 2],
+    "model": {"d_model": 64, "n_heads": 4, "n_layers": 3},
+    "eval": {"split": "test", "buildings_per_type": 5, "baseline": "RBC (G36 unitary / air-loop VAV) on the same chunk"}
+  },
+  "artifacts_sha256": {
+    "checkpoints/model_s0.eqx": "b6207d77edf687d697e73cbaaf99d9e6cdafcf1f84f31ed15b8f097fda5ebb7a",
+    "checkpoints/model_s1.eqx": "32b5a1239cdf1a498c7f6fc27a55f6407ae630ae69ed14047efeec43e86a7dfd",
+    "checkpoints/model_s2.eqx": "916a992f89833ce31aff7734ccae52fa39f71d7e7e26e03dd02abc507b2da534",
+    "data/baseline_chunk.csv": "e690b3704ec96ce23c7cad77738cdc3ae1bc41116fb6eea99d7ae5429b82f80c",
+    "data/transfer_port_eval.csv": "74ed350ed7e1a45512d2ed4aff627ab0e3d3191ce1cdb5a0154bad01400d32b2"
+  }
+}

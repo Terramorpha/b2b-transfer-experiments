@@ -1,0 +1,6 @@
+[submodule "vendor/morel"]
+	path = vendor/morel
+	url = git@github.com:Terramorpha/morel.git
+[submodule "vendor/Building2Building"]
+	path = vendor/Building2Building
+	url = git@github.com:vtaboga/Building2Building.git
