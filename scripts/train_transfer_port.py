@@ -68,15 +68,24 @@ def main() -> None:
           f"{args.total_iterations} iters, resample every {args.resample_interval}, "
           f"task={args.task}", flush=True)
 
+    cfg = PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma)
+
+    def log_fn(metrics, step):
+        # step_reward is the mean per-step reward; scale to an episode-return
+        # line that's directly comparable to RBC's returns.
+        sr = metrics.get("rollout/step_reward")
+        extra = {"rollout/episode_return": sr * cfg.n_steps} if sr is not None else {}
+        wandb.log({**metrics, **extra}, step=step)
+
     train_transfer(
         building_types=tuple(args.building_types),
         n_buildings_per_type=args.n_buildings_per_type,
         task=args.task,
         total_iterations=args.total_iterations,
         resample_interval=args.resample_interval,
-        cfg=PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma),
+        cfg=cfg,
         seed=args.seed,
-        log_fn=lambda metrics, step: wandb.log(metrics, step=step),
+        log_fn=log_fn,
         checkpoint_path=ckpt,
         init_model=init_model,
         all_active=args.all_active,

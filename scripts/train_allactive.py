@@ -56,14 +56,21 @@ def main() -> None:
     print(f"[train] all-active {args.building_types} x{args.n_envs}, "
           f"{args.total_steps} steps, task={args.task}", flush=True)
 
+    cfg = PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma)
+
+    def log_fn(metrics, step):
+        sr = metrics.get("rollout/step_reward")
+        extra = {"rollout/episode_return": sr * cfg.n_steps} if sr is not None else {}
+        wandb.log({**metrics, **extra}, step=step)
+
     train(
         building_types=tuple(args.building_types),
         n_envs_per_type=args.n_envs,
         task=args.task,
         total_steps=args.total_steps,
-        cfg=PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma),
+        cfg=cfg,
         seed=args.seed,
-        log_fn=lambda metrics, step: wandb.log(metrics, step=step),
+        log_fn=log_fn,
         checkpoint_path=ckpt,
         init_model=init_model,
     )
