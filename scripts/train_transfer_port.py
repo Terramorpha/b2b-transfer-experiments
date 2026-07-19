@@ -38,6 +38,11 @@ def main() -> None:
     p.add_argument("--ent-coef", type=float, default=0.01)
     p.add_argument("--gamma", type=float, default=0.98)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--all-active", action="store_true",
+                   help="every building active each update (joint gradient over the "
+                        "whole pool) instead of resampling one per type")
+    p.add_argument("--n-workers", type=int, default=1,
+                   help="parallel rollout worker processes (one env per worker)")
     p.add_argument("--init-checkpoint", default=None,
                    help="warm-start PPO from this checkpoint instead of a fresh net")
     p.add_argument("--out", default="runs/transfer_port")
@@ -74,6 +79,8 @@ def main() -> None:
         log_fn=lambda metrics, step: wandb.log(metrics, step=step),
         checkpoint_path=ckpt,
         init_model=init_model,
+        all_active=args.all_active,
+        n_workers=args.n_workers,
     )
     print(f"[done] checkpoint {ckpt}", flush=True)
     wandb.finish()
