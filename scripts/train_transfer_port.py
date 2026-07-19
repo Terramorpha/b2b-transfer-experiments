@@ -22,7 +22,7 @@ import _pin_dataset  # noqa: F401  pins the b2b dataset revision before any env
 import wandb
 
 from morel_amorpheus import PPOConfig
-from morel_b2b_amorpheus import train_transfer
+from morel_b2b_amorpheus import load_model, train_transfer
 
 
 def main() -> None:
@@ -35,12 +35,21 @@ def main() -> None:
     p.add_argument("--total-iterations", type=int, default=400)
     p.add_argument("--resample-interval", type=int, default=10)
     p.add_argument("--lr", type=float, default=5e-5)
+    p.add_argument("--ent-coef", type=float, default=0.01)
+    p.add_argument("--gamma", type=float, default=0.98)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--init-checkpoint", default=None,
+                   help="warm-start PPO from this checkpoint instead of a fresh net")
     p.add_argument("--out", default="runs/transfer_port")
     args = p.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
     ckpt = os.path.join(args.out, f"model_s{args.seed}.eqx")
+
+    init_model = None
+    if args.init_checkpoint is not None:
+        init_model = load_model(args.init_checkpoint, d_model=64, n_heads=4, n_layers=3)
+        print(f"[setup] warm-starting from {args.init_checkpoint}", flush=True)
 
     run = wandb.init(
         project="morel-b2b-transfer-port",
@@ -60,10 +69,11 @@ def main() -> None:
         task=args.task,
         total_iterations=args.total_iterations,
         resample_interval=args.resample_interval,
-        cfg=PPOConfig(learning_rate=args.lr),
+        cfg=PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma),
         seed=args.seed,
         log_fn=lambda metrics, step: wandb.log(metrics, step=step),
         checkpoint_path=ckpt,
+        init_model=init_model,
     )
     print(f"[done] checkpoint {ckpt}", flush=True)
     wandb.finish()
