@@ -45,6 +45,9 @@ def main() -> None:
                    help="parallel rollout worker processes (one env per worker)")
     p.add_argument("--init-checkpoint", default=None,
                    help="warm-start PPO from this checkpoint instead of a fresh net")
+    p.add_argument("--baseline-json", default=None,
+                   help="JSON {suffix: value}; logged as constant baseline/<suffix> "
+                        "series each update, for dashed reference lines on wandb")
     p.add_argument("--out", default="runs/transfer_port")
     args = p.parse_args()
 
@@ -70,14 +73,21 @@ def main() -> None:
 
     cfg = PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma)
 
+    baselines = {}
+    if args.baseline_json is not None:
+        import json
+        with open(args.baseline_json) as f:
+            baselines = {f"baseline/{k}": float(v) for k, v in json.load(f).items()}
+
     def log_fn(metrics, step):
         # step_reward is the mean per-step reward; scale to an episode-return line
         # comparable to RBC's returns. Only fill in if the trainer didn't already
-        # log a real episode_return (from finished episodes).
+        # log a real episode_return (from finished episodes). Constant baseline/*
+        # series render as flat reference lines to compare against.
         sr = metrics.get("rollout/step_reward")
         extra = ({"rollout/episode_return": sr * cfg.n_steps}
                  if sr is not None and "rollout/episode_return" not in metrics else {})
-        wandb.log({**metrics, **extra}, step=step)
+        wandb.log({**metrics, **extra, **baselines}, step=step)
 
     train_transfer(
         building_types=tuple(args.building_types),
