@@ -60,7 +60,8 @@ def main() -> None:
 
     def log_fn(metrics, step):
         sr = metrics.get("rollout/step_reward")
-        extra = {"rollout/episode_return": sr * cfg.n_steps} if sr is not None else {}
+        extra = ({"rollout/episode_return": sr * cfg.n_steps}
+                 if sr is not None and "rollout/episode_return" not in metrics else {})
         wandb.log({**metrics, **extra}, step=step)
 
     train(

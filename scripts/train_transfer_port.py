@@ -71,10 +71,12 @@ def main() -> None:
     cfg = PPOConfig(learning_rate=args.lr, ent_coef=args.ent_coef, gamma=args.gamma)
 
     def log_fn(metrics, step):
-        # step_reward is the mean per-step reward; scale to an episode-return
-        # line that's directly comparable to RBC's returns.
+        # step_reward is the mean per-step reward; scale to an episode-return line
+        # comparable to RBC's returns. Only fill in if the trainer didn't already
+        # log a real episode_return (from finished episodes).
         sr = metrics.get("rollout/step_reward")
-        extra = {"rollout/episode_return": sr * cfg.n_steps} if sr is not None else {}
+        extra = ({"rollout/episode_return": sr * cfg.n_steps}
+                 if sr is not None and "rollout/episode_return" not in metrics else {})
         wandb.log({**metrics, **extra}, step=step)
 
     train_transfer(
