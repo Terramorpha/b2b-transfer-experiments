@@ -58,7 +58,8 @@ Representative: OfficeSmall-5996 policy `-42.3` vs RBC `-9.4`.
 | H12 | Born-Again self-distillation (fresh-init net matching teacher's action dist) improves held-out generalization | **ruled out** | Student ≈ teacher within rollout noise (<1 pt) on all 10 buildings, still 0/5. BAN's dark-knowledge regularization is a *classification* effect (softmax over classes); a continuous Beta policy has no class structure to exploit, so distillation just re-creates the controller |
 | H13 | The net can't *represent* RBC-level control (representational limit) | **REFUTED — capacity confirmed** | Behavior-cloning RBC into the same net matches RBC on train (2/5 beat it, all within ~1 pt) → the good policy is representable + gradient-reachable; PPO just can't find it. Definitively localizes the failure to PPO optimization. Clone also generalizes ~2–3× closer to RBC on held-out test than PPO |
 | H14 | Warm-starting PPO from the RBC clone (+ pretrained critic) lets it beat RBC | **ruled out — RL overfits (as configured)** | With a perfect warm-start, a pretrained critic, and ent=0 (no divergence), *resampled* PPO holds RBC-level on *train* but **overfits** — held-out test collapses. Superseded by H15: the overfitting was the **resampling batch structure**, not the RL objective |
-| H15 | Training all buildings **jointly** per update (vs resampled 1-at-a-time) fixes the overfitting | **✅ CONFIRMED — BEATS RBC 5/5 train AND 5/5 held-out test** | All-active persistent training, warm-started from BC+critic, ent=0: **beats RBC on every building**, 3–4× better on easy held-out (5996 −2.7 vs −9.4). Only change vs the overfitting H14 run = joint vs resampled batch. **The resampling loop was the root cause all along.** |
+| H15 | Training all buildings **jointly** per update (vs resampled 1-at-a-time) fixes the overfitting | **✅ persistent all-active BEATS RBC 5/5+5/5 — but the *cause* was misattributed (see H16)** | Persistent all-active, warm-started, ent=0: beats RBC on every building (5996 −2.7 vs −9.4). Changed *two* things vs H14: resampled→all-active AND cold-start→persistent. |
+| H16 | Confound: is it the all-active *batching* or the persistent *full-year* rollout? | **persistence is the driver, NOT all-active** | Cold-start all-active (all-active held, cold-start restored) **FAILS: 1/5 train, 0/5 test** (5996 −29, 6000 −36). Cold-start only ever trains on the first 7-day chunk (resets each update); persistent rolls continuously through the whole year (~3× over 150 updates → all seasons). **Temporal data diversity (full year), not joint batching, is what generalizes.** |
 
 **Framing:** a good policy provably *exists* — **RBC beats the policy 0/5** (RBC −9.4 vs policy −27..−37 on 5996). So this is an **RL optimization failure**, not a controllability/observability/scaling limit. PPO cannot find RBC-level heating for OfficeSmall's control problem *even as a specialist*. The open question is *why the optimizer stalls* (exploration H7 = partial; horizon/credit H9 = leading).
 
@@ -79,17 +80,20 @@ clone (+ pretrained critic, ent=0) holds RBC-level on train but **overfits and d
 held-out generalization** — under the *resampling* loop (one building per update). This
 looked like "the RL objective can't generalize"... until H15.
 
-**✅ SOLVED (H15) — the resampling batch structure was the root cause; joint training beats
-RBC.** Training on **all 10 buildings jointly per update** (persistent all-active trainer,
-same warm-start + critic + ent=0 as H14) **beats RBC on all 5 train AND all 5 held-out test
-buildings**, 3–4× better on the easy held-out (5996 −2.7 vs RBC −9.4). The *only* change from
-the overfitting H14 run is joint-vs-resampled batching. So the mechanism: **one-at-a-time
-resampling is a continual-learning regime that overfits/forgets per building; a joint
-gradient over the whole pool forces a generalizing control law** (entropy stays moderate
-instead of collapsing sharp). This ties back to H11/H12 — the drift/plasticity intuition was
-right, just the fix was joint batching, not distillation. **Best controller:
-`runs/officesmall_allactive` (beats RBC 10/10).** Recipe: RBC behavior-clone → value-head
-pretrain → all-active PPO fine-tune (ent=0, γ=0.99, low LR).
+**✅ SOLVED — but the mechanism is TEMPORAL DATA DIVERSITY, not joint batching (H15→H16).**
+The persistent all-active trainer (warm-start + critic + ent=0) **beats RBC on all 5 train
+AND all 5 held-out test buildings** (5996 −2.7 vs RBC −9.4). *Initial* read (H15): the fix was
+all-active joint batching vs resampling. **Confound test (H16) corrected this:** cold-start
+all-active — same joint batching but resetting to the first 7-day chunk each update — **FAILS
+(1/5 train, 0/5 test)**. The difference is *what data the policy sees*: cold-start trains only
+on **week 1** (reset every update); persistent rolls **continuously through the full year**
+(~3× over 150 updates → all seasons). So generalization comes from **training on the whole
+year**, not from the joint gradient. All-active on week-1-only data overfits like everything
+else. **Best controller: `runs/officesmall_allactive` (persistent, beats RBC 10/10).** Recipe:
+RBC behavior-clone → value-head pretrain → **persistent** all-active PPO fine-tune (ent=0,
+γ=0.99, low LR). NB: the parallel *cold-start* path we built does not reproduce the win — to
+parallelize the winner needs persistent-parallel workers, or adding random-chunk-start
+(temporal diversity) to the cold-start trainer.
 
 ## Details
 
