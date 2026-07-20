@@ -1,7 +1,31 @@
-# Why can't the policy beat RBC on OfficeSmall? — investigation log
+# Beating RBC: OfficeSmall investigation → 4-type transfer — running log
 
 **Living document.** Hypotheses, the experiments run against them, and results.
-Update as we go.
+Part I (H1–H16) is the OfficeSmall investigation. Part II is the 4-type transfer
+work it led to, plus **protocol corrections that change how Part I's numbers read**.
+
+> ## ⚠️ READ FIRST — evaluation-protocol corrections (2026-07-20)
+>
+> `timesteps_per_hour = 12` (not 4, which I assumed for a long time). Therefore:
+>
+> | quantity | correct value |
+> |---|---|
+> | the 672-step eval "chunk" | **2.33 days** (56 h), starting Jan 1 — *not* 7 days |
+> | a full year | **105,120 steps** |
+> | updates per simulated year (672-step segments) | **~156** |
+> | 400-update run | **2.56 passes over the SAME year** |
+>
+> **Every win-rate in this document — including the OfficeSmall 10/10 — is measured
+> on that 672-step window, i.e. ~0.6% of a year, in January.** Those comparisons are
+> internally fair (policy and RBC use the identical window, `baseline_chunk.csv`), but
+> they are **not** annual performance. Full-year evaluation is a separate, harder test
+> (see Part II §Full-year evaluation), and early evidence is that results do **not**
+> automatically carry over.
+>
+> **EnergyPlus is deterministic**: replaying the year adds *no* new environmental data.
+> Coverage saturates at ~156 updates; beyond that, extra updates are **epochs over fixed
+> data** (with the attendant overfitting risk), not added diversity. Genuine temporal
+> diversity would need multiple weather years, which the dataset does not provide.
 
 ## The problem
 The transfer policy (`task_occ_e0` = occupancy/dynamic setpoint, comfort-only
@@ -337,7 +361,144 @@ parallelize the winner needs persistent-parallel workers, or adding random-chunk
   a real fix worth committing to morel). Do **not** disable the persistent cache —
   that forces more recompiles and OOMs sooner.
 
+---
+
+# Part II — 4-type transfer under the full-year regime
+
+**Motivation.** H16 showed the failing regime was *cold-start*, which resets to step 0
+every update and therefore trains only on the **first 672 steps (2.33 days) of January**.
+The **original transfer experiment used exactly that regime**, so the published transfer
+result may be limited by a training artifact rather than anything fundamental. Part II
+re-runs it with persistent full-year rollouts.
+
+## Runs
+
+All: 4 types × 5 buildings = 20 persistent envs, `task_occ_e0`, from scratch, and the
+**ORIGINAL hyperparameters** (lr 5e-5 / ent 0.01 / γ 0.98) so that only the *regime* changes.
+
+| run | updates | chunk-eval vs RBC | notes |
+|---|---|---|---|
+| `transfer4_persistent` (wandb `a4qh14t1`) | 74 | **8/20** | under-trained |
+| `transfer4_persistent_long` (wandb `t3x54yyn`) mid snapshot ≈100 | ~100 | **19/20** | best chunk result |
+| `transfer4_persistent_long` final | 400 | **14/20** | OfficeMedium collapses |
+
+**Budget was the dominant factor** (8/20 → 19/20 from more updates alone), confirming the
+first "mixed" verdict was an artifact of under-training.
+
+### Chunk-eval detail (672-step window; the caveat at the top applies)
+| type | orig transfer | mid (~100) | final (400) | RBC |
+|---|---|---|---|---|
+| RetailStandalone | −68.5 | −93.4 (4/5) | **−73.4 (5/5)** | −79.3 |
+| RestaurantFastFood | −14.1 | −10.1 (5/5) | −10.6 (4/5) | −11.9 |
+| OfficeMedium | −61.0 | **−37.1 (5/5)** | **−186.1 (0/5)** | −55.8 |
+| OfficeSmall | −31.0 | −14.3 (5/5) | −13.7 (5/5) | −16.1 |
+
+### OfficeMedium: overfits with extended training
+Between ~100 and 400 updates its **training** return kept improving (−263 → −65) while its
+**held-out** return collapsed (−37 → −186). Training is the *stochastic* policy
+(pessimistic) and eval the *deterministic* one (optimistic), so the gap runs the **wrong
+way** — that is overfitting, not noise. OfficeMedium is the most complex morphology
+(15 zones, ~30 action dims, the only VAV type) trained on only 5 buildings, and post-156
+updates the extra passes are pure epochs on fixed data. **Fix: more OfficeMedium buildings**,
+not fewer updates; early stopping is only a workaround.
+
+### Full-year evaluation — FINAL RESULT: the policy loses 0/20
+
+Final checkpoint, 20 held-out buildings, one complete EnergyPlus year each
+(105,120 steps), scored against **baselines we computed ourselves** with the same
+harness (`data/rbc_fullyear_canonical.json`; OfficeMedium uses the *corrected* VAV
+controller, below):
+
+| type | mean vs baseline | wins |
+|---|---|---|
+| RestaurantFastFood | **−16.4%** | 0/5 |
+| RetailStandalone | −64.3% | 0/5 |
+| OfficeSmall | −80.1% | 0/5 |
+| OfficeMedium | **−155.3%** | 0/5 |
+| **TOTAL** | | **0/20** |
+
+**This directly contradicts the chunk protocol**, which scored the same policy at
+19/20 (mid) and 14/20 (final). The 672-step window (2.33 days of January, ~0.6% of a
+year) does not merely add noise — it *reverses the ranking*. RBC's own chunk score
+extrapolates almost exactly to its full-year score (−14.53 × 156.4 = −2272 vs actual
+−2262), i.e. the window is representative *for a competent controller*; the policy
+matches RBC there and then degrades everywhere else. **Report full-year numbers.**
+
+### The VAV baseline was mis-specified (and fixing it matters)
+`AirLoopPolicy` regulated to a hard-coded `cfg.target_temp=21.0` and never bound a
+`target_temperature` observation (`air_loop.py:34,278`; contrast
+`unitary_hvac.py:333-336`), so under `task_occ_e0` (21 °C occupied / 18 °C setback) it
+tracked the wrong target: measured corr(commanded SAT, setpoint) = **−0.45** with a SAT
+span of 2.1 °C, versus **+0.64** / 14.6 °C for the unitary baseline
+(`figures/build_sat_setpoint_figure.py`). Fixed on branch
+`feature/vav-dynamic-setpoint`; corr → **+0.71**, unitary unchanged (refactor verified
+a no-op). Ablation on OfficeMedium, full year:
+
+| variant | full-year mean | vs original |
+|---|---|---|
+| original (fixed 21 °C) | −10732.0 | — |
+| **setpoint tracking only** | **−8097.5** | **+24.5%** |
+| tracking + deadband=1.0 | −10931.1 | −1.9% (deadband marginal cost **−35.0%**) |
+
+**A comfort deadband is strictly harmful under `energy_weight=0`**: actuating inside
+the band is free, so the band only lets the zone drift toward the penalty region. It
+is right only when energy is priced — kept as a mechanism, defaulted off.
+
+### Full-year evaluation — earlier, superseded notes
+- **First attempt was INVALID and its numbers are void**: the eval capped at 40,000 steps
+  (38% of a year) while the RBC table covers the full year, so the policy accrued less
+  penalty purely by stopping early. It reported "16/20"; ignore it.
+- Corrected eval runs to termination (105,120 steps) against
+  `building2building/scores/baseline_returns.csv` (`task_occ_e0`, `full_year`).
+- **Early valid data point**: mid checkpoint on Retail-2997 = **−9087.5 vs RBC −3479.0**
+  (2.6× worse), and Retail-2998 −6085.7 vs −3025.4 — i.e. the chunk result **reverses**
+  over a full year.
+- **Leading explanation — a coverage hole.** The mid checkpoint ran 100 × 672 = 67,200 of
+  105,120 steps = **64% of a year: it never saw Sept–Dec**. Degradation is *super-linear*
+  (linear scaling predicts −4457, actual −9087), consistent with failing on unseen
+  conditions. The final checkpoint (2.56 passes) has full coverage → prediction: it should
+  do markedly better on the full year, reversing the chunk ranking. **Eval running.**
+
+### Seasonality — a correction
+Initial claim ("winter is harder, confirmed") was **an artifact**: I imposed the wrong
+period (52 vs the true ~156) and reported *phases* rather than *indices*, so a monotonic
+training trend masqueraded as seasonal clustering (the worst updates are simply indices
+1–26, i.e. before the policy learned). Detrended autocorrelation is ≈0 at both lags.
+**However**, the year-wrap *is* visible and large: at updates ≈156 and ≈312 the return
+jumps from ~−5 to ~−40 (**8× degradation**) as the env resets to January. So a winter/reset
+penalty is real; autocorrelation was simply the wrong instrument for a sharp, localised
+spike. (The wrap conflates January weather with a cold thermal reset; this data can't
+separate them.)
+
+## Infrastructure added in Part II
+- **Periodic checkpointing** (`snapshot_every=25`) — previously the rolling checkpoint was
+  overwritten every update, so a run's best model was silently lost. The 19/20 weights
+  survived only because they were copied by hand for an eval.
+- **Per-building return logging** (`return/<type>_<idx>`) in both trainers.
+- **RBC baselines per train pool** (`compute_rbc_baselines.py`, correct controller per type:
+  `AirLoopPolicy` for OfficeMedium/VAV, `UnitaryHvacPolicy` otherwise) + `--baseline-json`
+  for constant wandb reference lines.
+- **Parallel full-year eval** (`eval_fullyear_panel.py --n-workers`): spawn process per
+  building, idx-major ordering so a first cross-type read arrives early.
+- **Figure renderer parameterized** (`--eval-csv/--baseline-csv/--outdir/--prefix`);
+  defaults reproduce the original camera-ready figure unchanged (verified).
+- **Live progress trick**: each rollout writes `/tmp/b2b_eplus_*/eplusout.eso`, whose
+  `2,<day-of-year>,<month>,<day>` records give the simulation date — poll it for progress
+  without touching the run.
+
+## Open questions
+1. **Full-year result** for the final checkpoint (running) — does full coverage reverse
+   the chunk ranking?
+2. **n=1.** Every Part II number is a single seed.
+3. **OfficeMedium pool size** — 5 buildings for the most complex morphology.
+4. **Which protocol should the mémoire headline?** Chunk (2.33 days) is what the original
+   experiment used; full-year is the honest annual claim. They disagree.
+
 ## Key artifacts
+- Part II checkpoints: `runs/transfer4_persistent_mid/` (≈100 upd, chunk 19/20),
+  `runs/transfer4_persistent_long/` (400 upd, chunk 14/20).
+- Part II scripts: `scripts/train_allactive.py`, `eval_transfer_panel.py`,
+  `eval_fullyear_panel.py`, `compute_rbc_baselines.py`.
 - Checkpoints: `runs/officesmall_only/` (150-iter), `runs/officesmall_resample_400/`
   (400-iter). Transfer: `checkpoints/model_s0..2.eqx`.
 - Scratchpad scripts (capture/plot/probe): `capture_officesmall.py`,
