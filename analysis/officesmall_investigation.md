@@ -371,8 +371,10 @@ The **original transfer experiment used exactly that regime**, so the published 
 result may be limited by a training artifact rather than anything fundamental. Part II
 re-runs it with persistent full-year rollouts.
 
-## Runs (all: 4 types × 5 buildings = 20 persistent envs, `task_occ_e0`, from scratch,
-## ORIGINAL hyperparameters lr 5e-5 / ent 0.01 / γ 0.98, so only the regime changes)
+## Runs
+
+All: 4 types × 5 buildings = 20 persistent envs, `task_occ_e0`, from scratch, and the
+**ORIGINAL hyperparameters** (lr 5e-5 / ent 0.01 / γ 0.98) so that only the *regime* changes.
 
 | run | updates | chunk-eval vs RBC | notes |
 |---|---|---|---|
