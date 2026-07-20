@@ -10,6 +10,7 @@ Colours from pub_style (nothing by eye): Baseline = reactive orange
 """
 from __future__ import annotations
 
+import argparse
 import os
 
 import matplotlib.pyplot as plt
@@ -48,8 +49,18 @@ def _cats(sub):
 
 
 def main() -> None:
-    df = pd.read_csv(CSV)
-    bdf = pd.read_csv(BASE_CSV)
+    # Defaults reproduce the original camera-ready figure exactly; the flags let
+    # the SAME renderer build other evals (e.g. full-year) in identical style.
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--eval-csv", default=CSV)
+    ap.add_argument("--baseline-csv", default=BASE_CSV)
+    ap.add_argument("--outdir", default=FIGDIR)
+    ap.add_argument("--prefix", default="transfer")
+    args = ap.parse_args()
+    figdir, prefix = args.outdir, args.prefix
+
+    df = pd.read_csv(args.eval_csv)
+    bdf = pd.read_csv(args.baseline_csv)
     ours = (df.groupby(["building_type", "building_id"])["episode_return"]
               .agg(["mean", "std"]).reset_index())
     m = ours.merge(bdf, on=["building_type", "building_id"])
@@ -58,7 +69,7 @@ def main() -> None:
     m["ours_norm_err"] = m["std"] / m["baseline_return"].abs()
 
     apply_pub_style()
-    os.makedirs(FIGDIR, exist_ok=True)
+    os.makedirs(figdir, exist_ok=True)
 
     # --- deliverables: one transparent vector PDF per atomic panel ---
     present = []
@@ -75,7 +86,7 @@ def main() -> None:
                      invert=False, reference=1.0, reference_label="Baseline (G36)")
         if i == 0:
             ax.set_ylabel("Building")
-        save(fig, os.path.join(FIGDIR, f"transfer_{short.lower()}"))
+        save(fig, os.path.join(figdir, f"{prefix}_{short.lower()}"))
 
     # --- combined figure: all panels in one transparent vector PDF. A single
     #     image has no LaTeX subcaptions, so panel names live in the figure as
@@ -94,13 +105,13 @@ def main() -> None:
     axes[0].set_ylabel("Building")
     fig.supxlabel(VALUE_LABEL)
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGDIR, "transfer_port_preview.png"),  # quick-look raster
+    fig.savefig(os.path.join(figdir, f"{prefix}_port_preview.png"),  # quick-look raster
                 dpi=200, bbox_inches="tight", facecolor="white")
-    save(fig, os.path.join(FIGDIR, "transfer_combined"))  # transparent PDF, closes fig
+    save(fig, os.path.join(figdir, f"{prefix}_combined"))  # transparent PDF, closes fig
 
-    print("per-panel PDFs:", sorted(f for f in os.listdir(FIGDIR) if f.endswith(".pdf")))
-    print("combined PDF:", os.path.join(FIGDIR, "transfer_combined.pdf"))
-    print("raster look:", os.path.join(FIGDIR, "transfer_port_preview.png"))
+    print("per-panel PDFs:", sorted(f for f in os.listdir(figdir) if f.endswith(".pdf")))
+    print("combined PDF:", os.path.join(figdir, f"{prefix}_combined.pdf"))
+    print("raster look:", os.path.join(figdir, f"{prefix}_port_preview.png"))
 
 
 if __name__ == "__main__":

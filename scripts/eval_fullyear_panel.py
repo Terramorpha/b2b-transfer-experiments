@@ -9,6 +9,7 @@ Scores against building2building/scores/baseline_returns.csv (task_occ_e0, full_
 Writes data/<tag>_fullyear_eval.csv and data/baseline_fullyear.csv for the figure.
 """
 import argparse
+import multiprocessing as mp
 import os
 import sys
 
@@ -29,10 +30,18 @@ from morel.morphology import trivial_morphology
 from evaluate import _b2b_factory_impl
 
 TYPES = ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall"]
-TASK, RP, N, MAX_STEPS = "task_occ_e0", "full_year", 5, 40000
+TASK, RP, N, MAX_STEPS = "task_occ_e0", "full_year", 5, 106000  # full year = 105_120 steps
 BASELINE_TABLE = os.path.join(
     REPO, "vendor", "Building2Building", "building2building", "scores",
     "baseline_returns.csv")
+
+
+def _worker(args):
+    """Spawn-pool worker: one full-year rollout in its own process (EnergyPlus-safe).
+    Top-level + picklable so it survives spawn."""
+    ckpt, bt, idx = args
+    ret, steps = policy_return(ckpt, bt, idx)
+    return bt, idx, ret, steps
 
 
 def policy_return(ckpt, bt, idx):
@@ -57,6 +66,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--tag", default="transfer4_mid")
+    ap.add_argument("--n-workers", type=int, default=3,
+                    help="parallel rollout processes (one building each)")
     args = ap.parse_args()
     ckpt = args.checkpoint if os.path.isabs(args.checkpoint) else os.path.join(REPO, args.checkpoint)
 
@@ -65,23 +76,27 @@ def main():
     base = dict(zip(b.building_id, b.reward_mean))
     reg = get_registry()
 
+    # idx-major ordering => the first wave is one building of EACH type, so a
+    # first cross-type read arrives early instead of after all of Retail.
+    tasks = [(ckpt, bt, idx) for idx in range(N) for bt in TYPES]
+    ids = {(bt, idx): reg.get_building_by_index(bt, "test", idx).building_id
+           for bt in TYPES for idx in range(N)}
+
     rows, brows = [], []
-    for bt in TYPES:
-        print(f"\n=== {bt} (test, full year) ===", flush=True)
-        wins = 0
-        for idx in range(N):
-            bid = reg.get_building_by_index(bt, "test", idx).building_id
-            p, steps = policy_return(ckpt, bt, idx)
+    print(f"[eval] {len(tasks)} full-year rollouts | {args.n_workers} parallel "
+          f"processes | one-per-type first", flush=True)
+    with mp.get_context("spawn").Pool(processes=args.n_workers) as pool:
+        for k, (bt, idx, p, steps) in enumerate(
+                pool.imap_unordered(_worker, tasks), 1):
+            bid = ids[(bt, idx)]
             rb = base.get(bid, float("nan"))
-            w = p > rb
-            wins += bool(w)
             rows.append({"building_type": bt, "building_id": bid,
                          "episode_return": p, "n_steps": steps, "seed": 0})
             brows.append({"building_type": bt, "building_id": bid,
                           "baseline_return": rb})
-            print(f"  {bid:26s} policy {p:10.1f}  RBC {rb:10.1f}  "
-                  f"({steps} steps)  {'POLICY' if w else 'rbc'}", flush=True)
-        print(f"  -> beats RBC on {wins}/{N}", flush=True)
+            print(f"  [{k:2d}/{len(tasks)}] {bid:26s} policy {p:10.1f}  "
+                  f"RBC {rb:10.1f}  ({steps} steps)  "
+                  f"{'POLICY' if p > rb else 'rbc'}", flush=True)
 
     df = pd.DataFrame(rows); bdf = pd.DataFrame(brows)
     out = os.path.join(REPO, "data", f"{args.tag}_fullyear_eval.csv")
