@@ -1,9 +1,17 @@
-"""Compute RBC episode returns for the OfficeSmall train pool, save as JSON.
+"""Compute RBC episode returns for a building pool, save as JSON.
 
-Produces data/officesmall_train_rbc_baseline.json = {"OfficeSmall_<idx>": return, ...,
-"episode_return": pool_mean}. Feed it to train_transfer_port.py --baseline-json so
-each per-building plot gets a constant RBC reference line on wandb.
+Uses the correct reactive controller per type (AirLoopPolicy for OfficeMedium/VAV,
+UnitaryHvacPolicy otherwise -- same dispatch as baseline_chunk.py).
+
+    python scripts/compute_rbc_baselines.py --split train --n 5 \
+        --building-types RetailStandalone RestaurantFastFood OfficeMedium OfficeSmall \
+        --out data/transfer4_train_rbc_baseline.json
+
+Output {"<type>_<idx>": return, ..., "episode_return": pool_mean} feeds
+train_transfer_port.py --baseline-json (constant wandb reference lines) and
+annotates status tables with the baseline each building must beat.
 """
+import argparse
 import json
 import os
 import sys
@@ -18,15 +26,18 @@ import _pin_dataset  # noqa: F401
 import numpy as np
 
 import building2building as b2b
-from baselines.controllers import UnitaryHvacPolicy
+from baselines.controllers import AirLoopPolicy, UnitaryHvacPolicy
 
-TASK, RP, CHUNK, POOL = "task_occ_e0", "full_year", 672, 10
-OUT = os.path.join(REPO, "data", "officesmall_train_rbc_baseline.json")
+TASK, RP, CHUNK = "task_occ_e0", "full_year", 672
 
 
-def rbc_return(idx):
-    env = b2b.make_env("OfficeSmall", split="train", index=idx, task=TASK, run_period=RP)
-    pol = UnitaryHvacPolicy(); pol.bind_env(env)
+def _controller(building_type: str):
+    return AirLoopPolicy() if building_type == "OfficeMedium" else UnitaryHvacPolicy()
+
+
+def rbc_return(bt, split, idx):
+    env = b2b.make_env(bt, split=split, index=idx, task=TASK, run_period=RP)
+    pol = _controller(bt); pol.bind_env(env)
     raw, _ = env.reset(); pol.reset()
     ret = 0.0
     for _t in range(CHUNK):
@@ -40,15 +51,28 @@ def rbc_return(idx):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--building-types", nargs="+",
+                    default=["RetailStandalone", "RestaurantFastFood",
+                             "OfficeMedium", "OfficeSmall"])
+    ap.add_argument("--split", default="train")
+    ap.add_argument("--n", type=int, default=5)
+    ap.add_argument("--out", default="data/transfer4_train_rbc_baseline.json")
+    args = ap.parse_args()
+
     base = {}
-    for idx in range(POOL):
-        base[f"OfficeSmall_{idx}"] = rbc_return(idx)
-        print(f"  OfficeSmall_{idx}: {base[f'OfficeSmall_{idx}']:.2f}", flush=True)
-    base["episode_return"] = float(np.mean([base[f"OfficeSmall_{i}"] for i in range(POOL)]))
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w") as f:
+    for bt in args.building_types:
+        for idx in range(args.n):
+            k = f"{bt}_{idx}"
+            base[k] = rbc_return(bt, args.split, idx)
+            print(f"  {k}: {base[k]:.2f}", flush=True)
+    base["episode_return"] = float(np.mean([v for k, v in base.items()]))
+
+    out = args.out if os.path.isabs(args.out) else os.path.join(REPO, args.out)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w") as f:
         json.dump(base, f, indent=2)
-    print(f"[done] pool mean {base['episode_return']:.2f} -> {OUT}", flush=True)
+    print(f"[done] pool mean {base['episode_return']:.2f} -> {out}", flush=True)
 
 
 if __name__ == "__main__":
