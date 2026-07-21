@@ -72,18 +72,21 @@ def main() -> None:
                     n_steps=args.n_steps, minibatch_size=max(1, args.n_steps // 2))
 
     upd_per_year = YEAR_STEPS / args.n_steps
+    # train() builds n_envs PER TYPE, so the env count is n_envs * n_types and
+    # total_steps (which counts every env's steps) must use the TOTAL.
+    n_total_envs = args.n_envs * len(args.building_types)
     if args.years is not None:
-        total_steps = int(round(args.years * YEAR_STEPS * args.n_envs))
+        total_steps = int(round(args.years * YEAR_STEPS * n_total_envs))
     else:
         total_steps = args.total_steps
-    years = total_steps / (YEAR_STEPS * args.n_envs)
-    updates = total_steps / (args.n_steps * args.n_envs)
+    years = total_steps / (YEAR_STEPS * n_total_envs)
+    updates = total_steps / (args.n_steps * n_total_envs)
     print(f"[protocol] year={YEAR_STEPS} steps | n_steps={args.n_steps} "
           f"-> {upd_per_year:.2f} updates/year"
           f"{' (NOT integer!)' if abs(upd_per_year-round(upd_per_year))>1e-9 else ''}",
           flush=True)
     print(f"[protocol] {years:.2f} YEARS per env  ({updates:.0f} updates, "
-          f"{total_steps} total steps across {args.n_envs} envs/type)", flush=True)
+          f"{total_steps} total steps across {n_total_envs} envs)", flush=True)
 
     def log_fn(metrics, step):
         sr = metrics.get("rollout/step_reward")
