@@ -424,6 +424,46 @@ extrapolates almost exactly to its full-year score (−14.53 × 156.4 = −2272 
 −2262), i.e. the window is representative *for a competent controller*; the policy
 matches RBC there and then degrades everywhere else. **Report full-year numbers.**
 
+### MECHANISM: the policy under-actuates — it nudges rather than actuates
+Rolling the policy and asking RBC counterfactually what it would command from the same
+state (OfficeSmall held-out, 1 week; `figures/build_policy_vs_rbc_actions_figure.py`):
+
+| | policy | RBC |
+|---|---|---|
+| supply-air setpoint (mean) | 19.00 °C | 16.44 °C |
+| fan flow (mean) | 7.22 | 5.85 |
+| fan flow **range** | **6.98–7.33** (span 0.35) | **4.50–15.00** (span 10.5) |
+| corr(SAT, task setpoint) | **+0.824** | +0.583 |
+
+The policy is **not** setpoint-blind — it tracks the setpoint *better* than RBC does, and
+commands *hotter* supply air (+2.57 °C). What it does not do is **move its actuators**.
+Its fan command is frozen at ~7.2 kg/s (per-zone spans 0.30–0.40, sd ≈0.05, verified on
+all 5 zones) on a [0, 15] actuator — and 7.2 is ~48% of the range, i.e. essentially the
+*middle*, which in normalized action space is ≈0: the untrained default of the action
+head. At peak demand RBC ramps to 15.0 while the policy stays at 7.2 — **less than half
+the airflow** — so hotter supply air still cannot close the gap and the zone sits 2–5 °C
+below setpoint.
+
+**This is universal across types** (fraction of each actuator's physical range exercised
+over 2 days, final 4-type checkpoint):
+
+| type | fan / flow | temp setpoint | other |
+|---|---|---|---|
+| RetailStandalone | 3.2% | 12.7% | 18.4% |
+| RestaurantFastFood | 2.4% | 17.1% | — |
+| OfficeSmall | **2.3%** | 23.5% | — |
+| OfficeMedium | 10.2% | 4.4% | 6.5% (30 reheat dims) |
+
+No actuator exceeds 23.5%; most are under 10%. RBC uses ~70% of the fan range on
+OfficeSmall versus the policy's 2.3% — a **30× difference**. OfficeMedium is uniformly
+under-actuated across all 36 dims, consistent with it being the worst type (−155.3%).
+
+**So the headline mechanism for the 0/20 result is partial actuation**, not mis-tracking:
+the policy learned *when* to act but not *how much*. Open question the BC run is designed
+to answer: BC from RBC will produce a policy that certainly does modulate the fan, so if
+RL then discards that capability the failure is exploration / credit assignment, not a
+representational limit.
+
 ### The VAV baseline was mis-specified (and fixing it matters)
 `AirLoopPolicy` regulated to a hard-coded `cfg.target_temp=21.0` and never bound a
 `target_temperature` observation (`air_loop.py:34,278`; contrast
