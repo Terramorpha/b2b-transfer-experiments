@@ -29,6 +29,11 @@ def main() -> None:
     p.add_argument("--building-types", nargs="+", default=["OfficeSmall"])
     p.add_argument("--n-envs", type=int, default=10)
     p.add_argument("--task", default="task_occ_e0")
+    p.add_argument("--split", default="train",
+                   help="dataset split to TRAIN on (use 'test' for specialist "
+                        "oracles that upper-bound achievable gains)")
+    p.add_argument("--indices", type=int, nargs="+", default=None,
+                   help="explicit building indices; default range(n_envs)")
     # --- protocol: everything is expressed in EnergyPlus YEARS ------------------
     # A year is 8760 h x 12 steps/h = 105_120 steps. n_steps=720 (2.5 days) divides
     # it exactly -> 146 updates == 1 year, so "how many passes over the year" is
@@ -74,7 +79,8 @@ def main() -> None:
     upd_per_year = YEAR_STEPS / args.n_steps
     # train() builds n_envs PER TYPE, so the env count is n_envs * n_types and
     # total_steps (which counts every env's steps) must use the TOTAL.
-    n_total_envs = args.n_envs * len(args.building_types)
+    n_per_type = len(args.indices) if args.indices else args.n_envs
+    n_total_envs = n_per_type * len(args.building_types)
     if args.years is not None:
         total_steps = int(round(args.years * YEAR_STEPS * n_total_envs))
     else:
@@ -97,6 +103,8 @@ def main() -> None:
     train(
         building_types=tuple(args.building_types),
         n_envs_per_type=args.n_envs,
+        split=args.split,
+        indices=tuple(args.indices) if args.indices else None,
         task=args.task,
         total_steps=total_steps,
         cfg=cfg,
