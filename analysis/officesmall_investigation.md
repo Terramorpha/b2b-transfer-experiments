@@ -624,3 +624,27 @@ building training is a regularizer, not just a convenience — on some buildings
 policy beats bespoke specialization.** The specialist is therefore NOT a clean upper bound
 everywhere: it bounds achievable performance where single-building training works
 (OfficeMedium, OfficeSmall, Restaurant) but underperforms where it overfits (Retail).
+
+## Probe: is the fan-freeze premature Beta concentration? — NO (credit assignment)
+Hypothesis: the Beta head couples location and scale, so entropy collapse concentrates
+the fan dim at its center → frozen. Test: a **concentration cap** (`Model.conc_cap`,
+`--conc-cap 10`) bounds α+β so exploration variance cannot collapse, mean preserved.
+From-scratch OfficeSmall-5996, 3 years (438 upd), `--conc-cap 10`
+(`runs/probe_conccap_OfficeSmall_0`, wandb `dwtrbjww`).
+
+- **Cap was active**: entropy held 6.16 → 4.19 (uncapped runs collapse to −3…−5), so the
+  fan was sampled with wide variance throughout.
+- **Fan still frozen**: eval fan range **0.6%**, supply-temp **4.6%** (cold specialist
+  0.1%; RBC ~70%). Forced exploration did **not** teach the actuator means to modulate.
+
+**Conclusion — coupling REFUTED; the root is credit assignment.** Even with the actions
+actively sampled across their range, the policy gradient never shapes the means toward
+modulation. Both actuators are stuck, consistent with a **coordinated-action** problem:
+comfort improves only when fan flow *and* supply temp move together (Q = ṁ·cp·ΔT), so the
+marginal advantage of exploring one dim alone (around a flat joint policy) is ~0. This is
+why BC is necessary — it copies the coordinated policy directly, never having to *discover*
+the coordination. Implication: the *action head* is not the culprit (drop the
+mean-concentration reparam; MLP+Gaussian only worth running to confirm it also fails). The
+promising fix targets credit/coordination — e.g. a collapsed "heating-intensity" action
+that maps to a coordinated (fan, supply-temp) pair so one dimension carries the signal.
+(n=1 building/seed, but ample exploration + full budget → strong signal.)
