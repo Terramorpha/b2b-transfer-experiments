@@ -51,6 +51,8 @@ def main() -> None:
     p.add_argument("--gamma", type=float, default=0.99)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--init-checkpoint", default=None)
+    p.add_argument("--conc-cap", type=float, default=None,
+                   help="cap Beta concentration alpha+beta (exploration floor); None=off")
     p.add_argument("--out", default="runs/officesmall_allactive")
     args = p.parse_args()
 
@@ -59,7 +61,8 @@ def main() -> None:
 
     init_model = None
     if args.init_checkpoint is not None:
-        init_model = load_model(args.init_checkpoint, d_model=64, n_heads=4, n_layers=3)
+        init_model = load_model(args.init_checkpoint, d_model=64, n_heads=4, n_layers=3,
+                                conc_cap=args.conc_cap)
         print(f"[setup] warm-starting from {args.init_checkpoint}", flush=True)
 
     run = wandb.init(
@@ -112,6 +115,7 @@ def main() -> None:
         log_fn=log_fn,
         checkpoint_path=ckpt,
         init_model=init_model,
+        conc_cap=args.conc_cap,
     )
     print(f"[done] checkpoint {ckpt}", flush=True)
     wandb.finish()
