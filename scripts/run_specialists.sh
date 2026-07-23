@@ -24,12 +24,12 @@ IDXS=(0 1 2 3 4)
 
 run_one() {
   local bt="$1" idx="$2"
-  local out="runs/specialist_${bt}_${idx}"
-  local log="${LOGDIR}/${bt}_${idx}.log"
+  local out="runs/specialist_${bt}_${idx}_y${YEARS}"
+  local log="${LOGDIR}/${bt}_${idx}_y${YEARS}.log"
   [ -f "${out}/model_s0.eqx" ] && { echo "  skip ${bt}_${idx} (exists)"; return 0; }
   guix shell energyplus python python-numpy python-pandas python-pytorch ty uv -- bash -c "
     export ENERGYPLUS_PATH=/gnu/store/99mrp2na1mh6a4z1rrxirk36dsy6wrkp-energyplus-25.1.0
-    export WANDB_MODE=offline MPLBACKEND=Agg
+    export WANDB_MODE=online MPLBACKEND=Agg
     vendor/morel/.venv/bin/python -u scripts/train_allactive.py \
       --building-types ${bt} --split test --indices ${idx} --n-envs 1 \
       --task task_occ_e0 --years ${YEARS} \

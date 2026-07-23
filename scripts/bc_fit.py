@@ -22,7 +22,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "vendor", "morel"))
 sys.path.insert(0, os.path.join(REPO, "vendor", "Building2Building"))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
-os.environ.setdefault("WANDB_MODE", "offline")
+# Default to online: all training runs are logged. Override with
+# WANDB_MODE=offline (sync later) or WANDB_MODE=disabled (smoke tests).
+os.environ.setdefault("WANDB_MODE", "online")
 
 import _pin_dataset  # noqa: F401
 import equinox as eqx
@@ -30,6 +32,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import wandb
 
 from morel_b2b_amorpheus import AMORPHEUS_B2B_BRIDGE, make_model, save_model
 from evaluate import _b2b_factory_impl
@@ -140,6 +143,13 @@ def main():
     args = ap.parse_args()
     out = args.out if os.path.isabs(args.out) else os.path.join(REPO, args.out)
 
+    run = wandb.init(
+        project="morel-b2b-transfer-port",
+        name=f"bc-fit-{os.path.basename(os.path.dirname(out))}-s{args.seed}",
+        config={"algorithm": "behavior_cloning", **vars(args)},
+    )
+    print(f"[setup] wandb: {run.url}", flush=True)
+
     print("[load] rebuilding morphologies + loading demos", flush=True)
     data = load_all(args.gamma)
     pol_grads = [make_policy_grad(m) for _n, m, *_r in data]
@@ -175,6 +185,8 @@ def main():
         if step % 1000 == 0 or step == args.policy_steps - 1:
             mean, per = eval_all(pol_losses, data, model, "policy")
             worst = names[int(np.argmax(per))]
+            wandb.log({"bc/action_mse": mean, "bc/action_mse_best": min(per),
+                       "bc/action_mse_worst": max(per), "phase": 0}, step=step)
             print(f"  step {step:6d}  action MSE (all bldgs) {mean:.5f}  "
                   f"[best {min(per):.4f} worst {max(per):.4f} @ {worst}]", flush=True)
 
@@ -195,10 +207,15 @@ def main():
         model = eqx.apply_updates(model, upd)
         if step % 1000 == 0 or step == args.value_steps - 1:
             mean, per = eval_all(val_losses, data, model, "value")
+            # offset the step so the critic phase continues past the policy phase
+            wandb.log({"bc/value_mse": mean, "bc/value_mse_best": min(per),
+                       "bc/value_mse_worst": max(per), "phase": 1},
+                      step=args.policy_steps + step)
             print(f"  step {step:6d}  value MSE (all bldgs) {mean:.3f}  "
                   f"[best {min(per):.2f} worst {max(per):.2f}]", flush=True)
 
     save_model(model, out)
+    wandb.finish()
     print(f"[done] {out}\nBC_FIT_DONE", flush=True)
 
 
