@@ -648,3 +648,28 @@ mean-concentration reparam; MLP+Gaussian only worth running to confirm it also f
 promising fix targets credit/coordination — e.g. a collapsed "heating-intensity" action
 that maps to a coordinated (fan, supply-temp) pair so one dimension carries the signal.
 (n=1 building/seed, but ample exploration + full budget → strong signal.)
+
+## BC clone alone (before RL): covariate shift + the OfficeMedium inversion
+Full-year eval of the pure BC clone (`runs/transfer4_bc_long`, no RL fine-tune) vs our
+baselines (`data/bc_clone_fullyear_eval.json`):
+
+| type | BC-clone (mean±std [min,max]) | warm RL | reading |
+|---|---|---|---|
+| OfficeSmall | **−513 ± 87 [−684,−449]** | +62.0% | clone **compounds catastrophically**; RL repairs it |
+| RestaurantFastFood | −18.8 ± 13.1 [−35,−5] | +59.1% | clone loses; RL fixes |
+| RetailStandalone | −19.3 ± 10.7 [−29,+1] | +22.6% | clone loses; RL fixes |
+| OfficeMedium | **−16.0 ± 14.2 [−41,0]** | −88.5% | **clone near-parity; RL WRECKS it** |
+
+Two findings:
+1. **Covariate shift is real and large.** The OfficeSmall clone imitates RBC well
+   step-to-step (RMSE 0.13, fan 68%) but drifts catastrophically over a full year
+   (−449…−684% on all 5 buildings) — small action errors push it into states RBC never
+   visited, compounding on the leaky building. RL fine-tuning **repairs** it (−513→+62%)
+   by training on the policy's own state distribution. This is *why* RL-on-top-of-BC is
+   needed, not BC alone. (DAgger would fix it at the source.)
+2. **OfficeMedium inversion — the clone beats RL.** OfficeMedium is the only type where
+   RL *hurts*: clone −16% (near parity) → multi-building RL −88.5%. The minority VAV
+   schema (5/20 envs, one shared trunk) gets dragged toward the unitary majority during
+   fine-tuning. So OfficeMedium is **solvable** (clone −16%, specialist −14% both reach
+   near-parity); the shared-trunk RL step is what destroys it. → clear fix: protect the
+   VAV schema during RL (per-schema LR, freeze VAV decoder, or rebalance the env mix).
