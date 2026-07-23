@@ -546,3 +546,81 @@ separate them.)
   `custom_action_probe.py`, `probe_amorpheus_setpoint.py`, `tau_lookup.py`,
   `eval_spec400.py`, `train_officesmall_rawtau.py`.
 - wandb project: `justin-veilleux-mila/morel-b2b-transfer-port`.
+
+---
+
+# Part III — mechanism, BC warm-start, and the specialist ceiling
+
+## The failure mechanism: the policy under-actuates (nudges, does not actuate)
+Rolling the from-scratch policy and asking RBC counterfactually what it would command in
+the same state (OfficeSmall-5996, 1 week; `scripts/rollout_policy_vs_rbc.py`,
+`figures/*policy_vs_rbc*`, `figures/*fan_speed*`):
+- The policy is **not** setpoint-blind — it tracks the setpoint *better* than RBC
+  (corr +0.82 vs +0.58) and commands *hotter* supply air (+2.57 °C).
+- It simply does not move its actuators. Fan command frozen at ~7.2 kg/s (span 0.35 on a
+  [0,15] range = ~48% = the untrained default) while RBC sweeps 4.5–15.0. The zone sits
+  2–5 °C below setpoint anyway: hotter air at half the flow can't close the gap.
+- **Universal**: no actuator exceeds ~23% of its range across all 4 types; fan ~2–3% on
+  the unitary types (RBC ~70%), a ~30× gap. So the 0/20 loss is **partial actuation**,
+  learned *when* to act but not *how much*.
+
+## It's an exploration failure, not a representational/objective one
+- **BC proves capacity.** Cloning RBC into the same net reaches fan usage ~68% ≈ RBC on
+  the unitary types — the architecture represents actuation fine.
+- **Warm-started PPO retains it.** Fine-tuning from the clone keeps fan usage 41–50% (vs
+  2.3% from scratch) and raises supply-temp actuation to 28–38%. PPO doesn't destroy
+  actuation its objective supposedly disfavours — it just can't *find* it from a
+  zero-centred init.
+- **CONTROL — a from-scratch single-building specialist also fails** (fan 0.0–0.1% of
+  range, worse than the transfer policy). So under-actuation is intrinsic to from-scratch
+  PPO here, NOT transfer-specific. → BC warm-start is *necessary*.
+- (Open follow-up, not run: MLP+Gaussian PPO would isolate whether the exploration
+  failure is the Beta parameterization specifically or PPO's weak per-dimension credit
+  assignment generally. The dimension-specificity — supply-temp 26% vs fan 2.3% under an
+  *identical* parameterization — points at credit assignment.)
+
+## Warm-started transfer policy: 0/20 → 14/20 over a full year
+BC clone (`officesmall_rbc_clone`→`_value_pretrain`) → **all-active PPO fine-tune**
+(ent=0, γ=0.99, low LR, `runs/transfer4_bcwarm`), full-year eval vs our own baselines:
+
+| type | from-scratch | **warm-start** | wins |
+|---|---|---|---|
+| OfficeSmall | −80.1% | **+62.0%** | 5/5 |
+| RestaurantFastFood | −16.4% | **+59.1%** | 5/5 |
+| RetailStandalone | −64.3% | **+22.6%** | 4/5 |
+| OfficeMedium | −155.3% | −88.5% | 0/5 |
+| **TOTAL** | **0/20** | **14/20** | |
+
+## The specialist ceiling (oracle: one policy per test building, trained on it)
+5-year (730-update) specialists, warm-started from the BC clone, each scored on its own
+test building full-year (`data/specialist_y5_fullyear_byid.json`). **Both beat RBC 14/20.**
+
+| type | **specialist (oracle)** | warm-transfer | reading |
+|---|---|---|---|
+| OfficeSmall | +73.9% | +62.0% | small headroom (~12 pt) |
+| RestaurantFastFood | +64.3% | +59.1% | small headroom (~5 pt) |
+| OfficeMedium | **−13.9%** | **−88.5%** | **huge headroom** — a dedicated policy nearly reaches RBC |
+| RetailStandalone | −10.0% | +22.6% | anomaly: specialist WORSE (see below) |
+
+**The load-bearing conclusion:** OfficeMedium is *achievable* (a specialist gets to −13.9%,
+near parity) — the shared transfer policy just badly under-serves the minority VAV schema
+(consistent with its fan never unfreezing). On OfficeSmall/Restaurant the transfer policy
+already captures ~85–90% of the achievable gain.
+
+### Retail anomaly: single-building training overfits, and diversity regularizes
+The Retail specialist LOSES to the transfer policy on all 5 buildings, catastrophically on
+2999 (−109.5% vs the transfer policy's −10.9%). Snapshot test on 2999:
+
+| specialist checkpoint | vs RBC |
+|---|---|
+| ~1 year (150 upd) | −69.7% |
+| ~2.5 years (375 upd) | −134.8% |
+| 5-year final (730 upd) | −109.5% |
+
+Two findings: (1) **more training makes it worse** — single-building PPO overfits, so the
+5-year budget hurt (peak is before 1 year). (2) Even the *best* snapshot (−69.7%) is far
+worse than the multi-building transfer policy (−10.9%) on the same building. So **multi-
+building training is a regularizer, not just a convenience — on some buildings the shared
+policy beats bespoke specialization.** The specialist is therefore NOT a clean upper bound
+everywhere: it bounds achievable performance where single-building training works
+(OfficeMedium, OfficeSmall, Restaurant) but underperforms where it overfits (Retail).
