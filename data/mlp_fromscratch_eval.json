@@ -1,0 +1,38 @@
+{
+  "OfficeMedium-4997": {
+    "return": -108819.36284811245,
+    "n_updates": 244
+  },
+  "OfficeMedium-4998": {
+    "return": -108451.12398125629,
+    "n_updates": 244
+  },
+  "OfficeSmall-5996": {
+    "return": -9337.245980479345,
+    "n_updates": 244
+  },
+  "OfficeSmall-5997": {
+    "return": -9835.471608871734,
+    "n_updates": 244
+  },
+  "RestaurantFastFood-3997": {
+    "return": -7523.91566523304,
+    "n_updates": 244
+  },
+  "RestaurantFastFood-3998": {
+    "return": -8018.029759803472,
+    "n_updates": 244
+  },
+  "RestaurantFastFood-3999": {
+    "return": -1997.1119237693235,
+    "n_updates": 244
+  },
+  "RetailStandalone-2997": {
+    "return": -7548.829265011407,
+    "n_updates": 244
+  },
+  "RetailStandalone-2998": {
+    "return": -17169.120733661606,
+    "n_updates": 244
+  }
+}
