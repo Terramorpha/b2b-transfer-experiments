@@ -11,6 +11,7 @@ Colours from pub_style (nothing by eye): Baseline = reactive orange
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import matplotlib.pyplot as plt
@@ -26,6 +27,10 @@ CSV = os.path.join(REPO, "data", "transfer_port_eval.csv")
 BASE_CSV = os.path.join(REPO, "data", "baseline_chunk.csv")
 FIGDIR = os.path.join(REPO, "figures_out")
 OURS_COLOR = W_E_COLORS["e0"]
+# Second series for the specialist-ceiling overlay: green reads as "the
+# achievable target". Validated CVD-safe vs OURS_COLOR (dE=19.6 > 12 target,
+# figures/validate_palette.py "#2a78d6,#008300").
+CEIL_COLOR = W_E_COLORS["e05"]
 
 TYPES = [("RetailStandalone", "Retail"), ("RestaurantFastFood", "Restaurant"),
          ("OfficeMedium", "OfficeMed"), ("OfficeSmall", "OfficeSmall")]
@@ -33,15 +38,21 @@ PANEL_W = TEXTWIDTH_IN / 4     # a 4-up figure at full text width
 VALUE_LABEL = "Normalized return"  # return / baseline on the same 672-step chunk
 
 
-def _series(sub):
+def _series(sub, ours_label="Ours", ceiling_label=None):
     # Normalized return = return / baseline (b2b compute_normalized_score
     # convention). The baseline is a constant 1.0 -> shown only as the dashed
     # reference line, not a redundant flat bar; Ours is its ratio. Both on the
     # SAME chunk (baseline_chunk.csv).
-    return [
+    s = [
         (sub["ours_norm"].to_numpy(), sub["ours_norm_err"].fillna(0.0).to_numpy(),
-         OURS_COLOR, "Ours"),
+         OURS_COLOR, ours_label),
     ]
+    # Optional upper-bound overlay (per-building specialist "oracle" ceiling).
+    # n=1 per building -> no error bars. Where the ceiling bar sits ABOVE Ours
+    # (e.g. Retail), single-building training overfit: the shared policy wins.
+    if ceiling_label is not None and "ceil_norm" in sub:
+        s.append((sub["ceil_norm"].to_numpy(), None, CEIL_COLOR, ceiling_label))
+    return s
 
 
 def _cats(sub):
@@ -56,8 +67,14 @@ def main() -> None:
     ap.add_argument("--baseline-csv", default=BASE_CSV)
     ap.add_argument("--outdir", default=FIGDIR)
     ap.add_argument("--prefix", default="transfer")
+    ap.add_argument("--ours-label", default="Ours")
+    # Optional upper-bound overlay: {building_id: return} JSON (e.g. per-building
+    # specialist "oracle"). When given, a second series is drawn + a legend.
+    ap.add_argument("--ceiling-json", default=None)
+    ap.add_argument("--ceiling-label", default="Specialist")
     args = ap.parse_args()
     figdir, prefix = args.outdir, args.prefix
+    clabel = args.ceiling_label if args.ceiling_json else None
 
     df = pd.read_csv(args.eval_csv)
     bdf = pd.read_csv(args.baseline_csv)
@@ -67,6 +84,12 @@ def main() -> None:
     m = m[np.isfinite(m["baseline_return"]) & (m["baseline_return"] != 0)]
     m["ours_norm"] = m["mean"] / m["baseline_return"]
     m["ours_norm_err"] = m["std"] / m["baseline_return"].abs()
+    if args.ceiling_json:
+        cj = json.load(open(args.ceiling_json))
+        m["ceil_norm"] = m["building_id"].map(cj) / m["baseline_return"]
+        missing = m[m["ceil_norm"].isna()]["building_id"].tolist()
+        if missing:
+            print(f"  (no ceiling value for {len(missing)} bldgs: {missing})")
 
     apply_pub_style()
     os.makedirs(figdir, exist_ok=True)
@@ -82,8 +105,9 @@ def main() -> None:
         fig, ax = barh_axes(width=PANEL_W, height=2.35)
         # No per-panel x-label: the four panels share one x quantity, so the
         # "Normalized return" label goes ONCE in LaTeX, centred under the row.
-        grouped_barh(ax, _cats(sub), _series(sub), value_label=None,
-                     invert=False, reference=1.0, reference_label="Baseline (G36)")
+        grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel),
+                     value_label=None, invert=False, reference=1.0,
+                     reference_label="Baseline (G36)")
         if i == 0:
             ax.set_ylabel("Building")
         save(fig, os.path.join(figdir, f"{prefix}_{short.lower()}"))
@@ -99,12 +123,22 @@ def main() -> None:
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
         ax.grid(axis="y", visible=False)
-        grouped_barh(ax, _cats(sub), _series(sub), value_label=None,
-                     invert=False, reference=1.0, reference_label="Baseline (G36)")
+        grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel),
+                     value_label=None, invert=False, reference=1.0,
+                     reference_label="Baseline (G36)")
         ax.set_title(short)
     axes[0].set_ylabel("Building")
     fig.supxlabel(VALUE_LABEL)
-    fig.tight_layout()
+    # With the ceiling overlay there are >=2 series -> a shared legend is
+    # mandatory (identity must not be colour-alone). One figure-level legend
+    # above the panels avoids four redundant copies.
+    if clabel is not None:
+        h, l = axes[0].get_legend_handles_labels()
+        fig.tight_layout(rect=[0, 0, 1, 0.9])
+        fig.legend(h, l, loc="upper center", ncol=len(l), frameon=False,
+                   bbox_to_anchor=(0.5, 1.0))
+    else:
+        fig.tight_layout()
     fig.savefig(os.path.join(figdir, f"{prefix}_port_preview.png"),  # quick-look raster
                 dpi=200, bbox_inches="tight", facecolor="white")
     save(fig, os.path.join(figdir, f"{prefix}_combined"))  # transparent PDF, closes fig

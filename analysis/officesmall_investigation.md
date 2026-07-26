@@ -607,6 +607,8 @@ near parity) — the shared transfer policy just badly under-serves the minority
 (consistent with its fan never unfreezing). On OfficeSmall/Restaurant the transfer policy
 already captures ~85–90% of the achievable gain.
 
+**Figure:** `figures_out_ceiling/ceiling_combined.pdf` overlays the per-building specialist ceiling (green) on the warm-transfer result (blue), RBC=1.0 dashed. It makes the headroom visible per type: OfficeMedium's ceiling hugs the baseline while the transfer policy overshoots it, and the Retail ceiling sits *above* the transfer bars (single-building overfitting). Rebuilt by the shared renderer with `--ceiling-json data/specialist_y5_fullyear_byid.json`.
+
 ### Retail anomaly: single-building training overfits, and diversity regularizes
 The Retail specialist LOSES to the transfer policy on all 5 buildings, catastrophically on
 2999 (−109.5% vs the transfer policy's −10.9%). Snapshot test on 2999:
