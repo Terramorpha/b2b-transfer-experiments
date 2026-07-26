@@ -53,6 +53,9 @@ class MLP(eqx.Module):
         return self.layers[-1](x)
 
 
+LOG_STD_MIN, LOG_STD_MAX = -5.0, 2.0  # keep std in [~0.007, ~7.4] -> no runaway
+
+
 class ActorCritic(eqx.Module):
     actor: MLP
     critic: MLP
@@ -62,7 +65,7 @@ class ActorCritic(eqx.Module):
         ka, kc = jax.random.split(key)
         self.actor = MLP([obs_dim, *hidden, act_dim], ka)
         self.critic = MLP([obs_dim, *hidden, 1], kc)
-        self.log_std = jnp.zeros(act_dim)
+        self.log_std = jnp.full((act_dim,), -0.5)  # start at std~0.6 (was 1.0)
 
 
 def _gauss_logprob(raw, mean, log_std):
@@ -80,11 +83,14 @@ def _squash_logdet(raw):
 
 @eqx.filter_jit
 def _act(model, obs_n, key):
-    """Sample a squashed action in [-1,1] + its log-prob and the value."""
+    """Sample: return squashed action in [-1,1], the RAW pre-tanh sample (stored
+    verbatim for the update -- reconstructing it via arctanh clips saturated
+    actions and corrupts the PPO ratio), its log-prob, and the value."""
+    ls = jnp.clip(model.log_std, LOG_STD_MIN, LOG_STD_MAX)
     mean = model.actor(obs_n)
-    raw = mean + jnp.exp(model.log_std) * jax.random.normal(key, mean.shape)
-    logp = _gauss_logprob(raw, mean, model.log_std) - _squash_logdet(raw)
-    return jnp.tanh(raw), logp, model.critic(obs_n)[0]
+    raw = mean + jnp.exp(ls) * jax.random.normal(key, mean.shape)
+    logp = _gauss_logprob(raw, mean, ls) - _squash_logdet(raw)
+    return jnp.tanh(raw), raw, logp, model.critic(obs_n)[0]
 
 
 @eqx.filter_jit
@@ -162,11 +168,12 @@ def make_update(opt):
     @eqx.filter_jit
     def update(model, opt_state, obs, act_raw, old_logp, adv, ret, clip, ent_c, vf_c):
         def loss_fn(m):
+            ls = jnp.clip(m.log_std, LOG_STD_MIN, LOG_STD_MAX)
             def per(o, ar):
                 mean = m.actor(o)
-                logp = _gauss_logprob(ar, mean, m.log_std) - _squash_logdet(ar)
+                logp = _gauss_logprob(ar, mean, ls) - _squash_logdet(ar)
                 v = m.critic(o)[0]
-                ent = jnp.sum(m.log_std + 0.5 * jnp.log(2.0 * jnp.pi * jnp.e))
+                ent = jnp.sum(ls + 0.5 * jnp.log(2.0 * jnp.pi * jnp.e))
                 return logp, v, ent
             logp, v, ent = jax.vmap(per)(obs, act_raw)
             ratio = jnp.exp(logp - old_logp)
@@ -239,15 +246,29 @@ def main():
     key = jax.random.PRNGKey(args.seed)
     key, mk = jax.random.split(key)
     model = ActorCritic(obs_dim, act_dim, tuple(args.hidden), mk)
-    opt = optax.chain(optax.clip_by_global_norm(0.5), optax.adam(args.lr))
+    n_updates = args.steps // args.n_steps
+    grad_steps = n_updates * args.epochs * max(1, args.n_steps // args.minibatch)
+    # linear LR decay to 0 -> standard PPO stabilizer for long single-env runs
+    sched = optax.linear_schedule(args.lr, 0.0, grad_steps)
+    opt = optax.chain(optax.clip_by_global_norm(0.5), optax.adam(sched))
     opt_state = opt.init(eqx.filter(model, eqx.is_array))
     update = make_update(opt)
     norm = RunningNorm(obs_dim)
-
-    n_updates = args.steps // args.n_steps
     print(f"[protocol] {args.steps} steps / n_steps {args.n_steps} = {n_updates} "
           f"updates | year={105120} steps", flush=True)
 
+    # --- warm up the obs normalizer with a random-action rollout so the very
+    #     first policy update never sees raw (unnormalized) EnergyPlus obs ---
+    obs = _reset(env); warm = []
+    wrng = np.random.default_rng(args.seed + 12345)
+    for _ in range(min(args.n_steps * 2, 4096)):
+        warm.append(obs.astype(np.float32))
+        a = wrng.uniform(-1, 1, act_dim)
+        obs, _, term, trunc, _ = _step(env, _to_env(a, lo, hi))
+        if term or trunc:
+            obs = _reset(env)
+    norm.update(np.asarray(warm, np.float32))
+    print(f"[warmup] normalizer seeded on {len(warm)} random-policy steps", flush=True)
     obs = _reset(env)
     global_step = 0
     for upd in range(n_updates):
@@ -255,9 +276,9 @@ def main():
         for _ in range(args.n_steps):
             on = norm.norm(obs[None])[0].astype(np.float32)
             key, sk = jax.random.split(key)
-            a01, logp, val = _act(model, jnp.asarray(on), sk)
+            a01, raw, logp, val = _act(model, jnp.asarray(on), sk)
             nobs, rew, term, trunc, _ = _step(env, _to_env(a01, lo, hi))
-            O.append(on); A_raw.append(np.arctanh(np.clip(np.asarray(a01), -1 + 1e-6, 1 - 1e-6)))
+            O.append(on); A_raw.append(np.asarray(raw))  # store the RAW sample verbatim
             LP.append(float(logp)); R.append(rew); V.append(float(val))
             end = term or trunc
             EP.append(1.0 if end else 0.0)
