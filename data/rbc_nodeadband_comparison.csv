@@ -1,0 +1,16 @@
+building_type,building_id,rbc_default,rbc_nodeadband,bcwarm,bc_beats_default,bc_beats_nodeadband
+RestaurantFastFood,RestaurantFastFood-3997,-7701.4,-6012.4,-3658.7,1,1
+RetailStandalone,RetailStandalone-2997,-9217.3,-4016.1,-4828.7,1,0
+OfficeSmall,OfficeSmall-5996,-2183.7,-753.0,-469.5,1,1
+RestaurantFastFood,RestaurantFastFood-3998,-7664.2,-6129.6,-3605.5,1,1
+RetailStandalone,RetailStandalone-2998,-5796.8,-5057.5,-4269.7,1,1
+OfficeSmall,OfficeSmall-5997,-1408.3,-918.2,-735.6,1,1
+RetailStandalone,RetailStandalone-2999,-6984.5,-7061.8,-7743.3,0,0
+RestaurantFastFood,RestaurantFastFood-3999,-2672.2,-443.5,-1102.6,1,0
+OfficeSmall,OfficeSmall-5999,-1767.5,-898.5,-694.4,1,1
+RetailStandalone,RetailStandalone-3000,-7098.2,-7239.5,-4838.7,1,1
+RestaurantFastFood,RestaurantFastFood-4000,-7866.7,-5977.9,-2979.4,1,1
+OfficeSmall,OfficeSmall-6000,-2245.4,-860.1,-450.9,1,1
+RetailStandalone,RetailStandalone-2035,-6423.4,-5436.9,-5267.7,1,1
+RestaurantFastFood,RestaurantFastFood-3003,-3773.4,-832.3,-1158.9,1,0
+OfficeSmall,OfficeSmall-5014,-1650.3,-1146.0,-940.1,1,1

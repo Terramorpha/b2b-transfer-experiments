@@ -1,4 +1,4 @@
-"""Full-year held-out eval across all 4 building types vs OUR OWN RBC baseline.
+"""Full-year held-out eval of a ModuMorph checkpoint vs OUR OWN RBC baseline (canonical protocol).
 
 THE standard evaluation protocol: one complete EnergyPlus year (105_120 steps =
 8760 h x 12 steps/h) per building, rolled to episode termination.
@@ -31,10 +31,16 @@ import numpy as np
 import pandas as pd
 
 from building2building.data.registry import get_registry
-from morel_amorpheus import amorpheus_policy
-from morel_b2b_amorpheus import AMORPHEUS_B2B_BRIDGE, load_model
+from morel_amorpheus import amorpheus_policy  # model-agnostic conditioned-policy wrapper
+from morel_b2b_modumorph import (
+    MODUMORPH_B2B_BRIDGE, MODUMORPH_B2B_FAITHFUL_BRIDGE, MODUMORPH_B2B_BLIND_BRIDGE,
+    load_model,
+)
 from morel.morphology import trivial_morphology
 from evaluate import _b2b_factory_impl
+
+BRIDGES = {"hn": MODUMORPH_B2B_BRIDGE, "faithful": MODUMORPH_B2B_FAITHFUL_BRIDGE,
+           "blind": MODUMORPH_B2B_BLIND_BRIDGE}
 
 TYPES = ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall"]
 TASK, RP, N, MAX_STEPS = "task_occ_e0", "full_year", 5, 106000  # full year = 105_120 steps
@@ -52,17 +58,21 @@ OUR_BASELINES = os.path.join(REPO, "data", "rbc_fullyear_ourharness.json")
 
 def _worker(args):
     """Spawn-pool worker: one full-year rollout in its own process (EnergyPlus-safe).
-    Top-level + picklable so it survives spawn."""
-    ckpt, bt, idx = args
-    ret, steps = policy_return(ckpt, bt, idx)
+    Top-level + picklable so it survives spawn. `task` is passed EXPLICITLY (not
+    read from the module global) because spawn re-imports the module fresh and
+    would otherwise reset it to the default."""
+    ckpt, bt, idx, variant, task = args
+    ret, steps = policy_return(ckpt, bt, idx, variant, task)
     return bt, idx, ret, steps
 
 
-def policy_return(ckpt, bt, idx):
-    env, source = _b2b_factory_impl(bt, idx, "test", TASK, RP)
-    lens = AMORPHEUS_B2B_BRIDGE.apply(trivial_morphology(source))
-    sp = amorpheus_policy(load_model(ckpt, d_model=64, n_heads=4, n_layers=3))(
-        AMORPHEUS_B2B_BRIDGE.apply(source))
+def policy_return(ckpt, bt, idx, variant, task=TASK):
+    bridge = BRIDGES[variant]
+    env, source = _b2b_factory_impl(bt, idx, "test", task, RP)
+    lens = bridge.apply(trivial_morphology(source))
+    sp = amorpheus_policy(load_model(
+        ckpt, variant=variant, d_model=64, d_context=32, n_heads=4, n_layers=3))(
+        bridge.apply(source))
     raw, _ = env.reset()
     ret, steps = 0.0, 0
     for _t in range(MAX_STEPS):
@@ -79,24 +89,28 @@ def policy_return(ckpt, bt, idx):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--tag", default="transfer4_mid")
+    ap.add_argument("--tag", default="modumorph_s0")
+    ap.add_argument("--variant", default="hn", choices=["hn", "faithful", "blind"],
+                    help="must match the variant the checkpoint was trained with")
     ap.add_argument("--n-workers", type=int, default=3,
                     help="parallel rollout processes (one building each)")
-    ap.add_argument("--building-types", nargs="+", default=None,
-                    help="restrict to these types (default: all four)")
+    ap.add_argument("--task", default=TASK,
+                    help="b2b task preset to roll on (comfort task_occ_e0, energy task_occ_emed)")
+    ap.add_argument("--baselines", default=OUR_BASELINES,
+                    help="RBC baseline JSON (building_id->return) to compare against; "
+                         "default the e0 comfort file -- pass data/rbc_emed_fullyear.json for energy")
     args = ap.parse_args()
-    if args.building_types is not None:
-        global TYPES
-        TYPES = args.building_types
     ckpt = args.checkpoint if os.path.isabs(args.checkpoint) else os.path.join(REPO, args.checkpoint)
+    baselines_path = args.baselines if os.path.isabs(args.baselines) else os.path.join(REPO, args.baselines)
 
-    with open(OUR_BASELINES) as f:
+    with open(baselines_path) as f:
         base = json.load(f)
     reg = get_registry()
+    print(f"[eval] task={args.task} baselines={baselines_path}", flush=True)
 
     # idx-major ordering => the first wave is one building of EACH type, so a
     # first cross-type read arrives early instead of after all of Retail.
-    tasks = [(ckpt, bt, idx) for idx in range(N) for bt in TYPES]
+    tasks = [(ckpt, bt, idx, args.variant, args.task) for idx in range(N) for bt in TYPES]
     ids = {(bt, idx): reg.get_building_by_index(bt, "test", idx).building_id
            for bt in TYPES for idx in range(N)}
 

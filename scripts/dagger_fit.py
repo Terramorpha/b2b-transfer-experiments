@@ -1,17 +1,17 @@
-"""Phase B of BC-from-RBC: fit a fresh net to the collected demonstrations.
+"""DAgger refit: fit a fresh ModuMorph net to ALL accumulated DAgger demos.
 
-Two phases, deliberately separate:
-  1. POLICY  -- fit the Beta mean to RBC's target actions (MSE).
+Mirrors bc_fit.py's two deliberately-separate phases, but against the ModuMorph
+model + MODUMORPH_B2B_BRIDGE instead of Amorpheus:
+  1. POLICY  -- fit the Beta mean to the expert's target actions (MSE).
   2. CRITIC  -- fit the value head to discounted returns-to-go, POLICY FROZEN
-                (grad-masked), so the value fit cannot distort the trunk.
+                (grad-masked) so the value fit cannot distort the trunk.
 
-Both matter downstream: warm-starting PPO with a random critic destroyed the cloned
-policy in an earlier attempt (garbage early advantages), and PPO must then be run with
-ent_coef=0 or the entropy bonus blows the imitation apart.
+The conditioning morphology comes from MODUMORPH_B2B_BRIDGE.apply(source), and
+node_ids/act_widths therefore come from the ModuMorph model's .condition(m).
+Reads EVERY npz under --demos (the aggregated DAgger dir), so successive DAgger
+iterations train on the union of all iterations' data.
 
-Minibatched so memory stays bounded regardless of demo size.
-
-    python scripts/bc_fit.py --out runs/transfer4_bc/model_s0.eqx
+    python scripts/dagger_fit.py --demos data/dagger_demos --out runs/dagger/model_it0.eqx
 """
 import argparse
 import glob
@@ -22,8 +22,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "vendor", "morel"))
 sys.path.insert(0, os.path.join(REPO, "vendor", "Building2Building"))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
-# Default to online: all training runs are logged. Override with
-# WANDB_MODE=offline (sync later) or WANDB_MODE=disabled (smoke tests).
 os.environ.setdefault("WANDB_MODE", "online")
 
 import _pin_dataset  # noqa: F401
@@ -34,10 +32,10 @@ import numpy as np
 import optax
 import wandb
 
-from morel_b2b_amorpheus import AMORPHEUS_B2B_BRIDGE, make_model, save_model
+from morel_b2b_modumorph import (
+    MODUMORPH_B2B_BRIDGE, make_model, load_model, save_model)
 from evaluate import _b2b_factory_impl
 
-DEMOS = os.path.join(REPO, "data", "bc_demos")
 TASK, RP = "task_occ_e0", "full_year"
 
 
@@ -50,17 +48,29 @@ def returns_to_go(rew, gamma):
     return G
 
 
-def load_all(gamma, stride_default=4):
-    """Rebuild each building's morphology (needed to condition the model) and pair it
-    with its stored demonstrations."""
+def load_all(demos_dir, variant, gamma, task=TASK, stride_default=4):
+    """Rebuild each building's ModuMorph morphology (needed to condition the
+    model) and pair it with its stored demonstrations. A building can appear in
+    several npz (one per DAgger iteration) -- each is its own training buffer,
+    keyed by the file's basename, so the whole aggregated dataset is used."""
     data = []
-    for path in sorted(glob.glob(os.path.join(DEMOS, "*.npz"))):
+    # cache morphologies by (bt, idx): EnergyPlus env construction is expensive
+    # and the same building recurs across iteration-tagged files.
+    m_cache = {}
+    for path in sorted(glob.glob(os.path.join(demos_dir, "*.npz"))):
         name = os.path.basename(path)[:-4]
-        bt, idx = name.rsplit("_", 1)
+        # filenames look like "{bt}_{idx}" (bc) or "{bt}_{idx}_it{iteration}".
+        core = name
+        if "_it" in core:
+            core = core[:core.rindex("_it")]
+        bt, idx = core.rsplit("_", 1)
+        key = (bt, int(idx))
+        if key not in m_cache:
+            env, source = _b2b_factory_impl(bt, int(idx), "train", task, RP)
+            m_cache[key] = MODUMORPH_B2B_BRIDGE.apply(source)
+            env.close()
+        m = m_cache[key]
         d = np.load(path)
-        env, source = _b2b_factory_impl(bt, int(idx), "train", TASK, RP)
-        m = AMORPHEUS_B2B_BRIDGE.apply(source)
-        env.close()
         obs = tuple(jnp.asarray(d[k]) for k in sorted(
             (k for k in d.files if k.startswith("obs")),
             key=lambda s: int(s[3:])))
@@ -68,7 +78,7 @@ def load_all(gamma, stride_default=4):
         stride = int(d["stride"]) if "stride" in d.files else stride_default
         G = returns_to_go(np.asarray(d["rew"]), gamma)[::stride][:ftar.shape[0]]
         data.append((name, m, obs, ftar, jnp.asarray(G, dtype=jnp.float32)))
-        print(f"  loaded {name:26s} {ftar.shape[0]:6d} samples, "
+        print(f"  loaded {name:30s} {ftar.shape[0]:6d} samples, "
               f"{len(obs)} nodes, act_dim {ftar.shape[1]}", flush=True)
     return data
 
@@ -114,12 +124,7 @@ def make_value_loss(m):
 
 
 def eval_all(loss_fns, data, model, which, n=512):
-    """Mean loss over ALL buildings on a FIXED evenly-spaced eval slice.
-
-    Training rotates buildings (b = step % n_buildings), so printing that step's loss
-    compares different buildings with different return scales -- a meaningless curve.
-    This gives a comparable number, plus the per-building spread.
-    """
+    """Mean loss over ALL buffers on a FIXED evenly-spaced eval slice."""
     per = []
     for lf, (_name, _m, obs, ftar, G) in zip(loss_fns, data):
         y = ftar if which == "policy" else G
@@ -131,7 +136,12 @@ def eval_all(loss_fns, data, model, which, n=512):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="runs/transfer4_bc/model_s0.eqx")
+    ap.add_argument("--demos", required=True,
+                    help="aggregated DAgger demo dir (all *.npz are used)")
+    ap.add_argument("--out", required=True, help="output ModuMorph .eqx")
+    ap.add_argument("--variant", default="hn", choices=["hn", "faithful", "blind"])
+    ap.add_argument("--task", default=TASK,
+                    help="b2b task preset used to rebuild morphologies (must match collect)")
     ap.add_argument("--gamma", type=float, default=0.99)
     ap.add_argument("--policy-steps", type=int, default=4000)
     ap.add_argument("--value-steps", type=int, default=2000)
@@ -139,37 +149,55 @@ def main():
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--seed", type=int, default=999)
     ap.add_argument("--init", default=None,
-                    help="start from this checkpoint (e.g. to extend critic training)")
-    ap.add_argument("--demos", default=None,
-                    help="demonstrations dir (default data/bc_demos)")
+                    help="start from this ModuMorph checkpoint")
     args = ap.parse_args()
-    if args.demos is not None:
-        global DEMOS
-        DEMOS = args.demos if os.path.isabs(args.demos) else os.path.join(REPO, args.demos)
+
+    demos = (args.demos if os.path.isabs(args.demos)
+             else os.path.join(REPO, args.demos))
     out = args.out if os.path.isabs(args.out) else os.path.join(REPO, args.out)
 
     run = wandb.init(
         project="morel-b2b-transfer-port",
-        name=f"bc-fit-{os.path.basename(os.path.dirname(out))}-s{args.seed}",
-        config={"algorithm": "behavior_cloning", **vars(args)},
+        name=f"dagger-fit-{os.path.basename(out)[:-4]}-s{args.seed}",
+        config={"algorithm": "dagger_bc", "arch": "modumorph", **vars(args)},
     )
     print(f"[setup] wandb: {run.url}", flush=True)
 
-    print("[load] rebuilding morphologies + loading demos", flush=True)
-    data = load_all(args.gamma)
-    pol_grads = [make_policy_grad(m) for _n, m, *_r in data]
-    val_grads = [make_value_grad(m) for _n, m, *_r in data]
-    pol_losses = [make_policy_loss(m) for _n, m, *_r in data]
-    val_losses = [make_value_loss(m) for _n, m, *_r in data]
+    print(f"[load] rebuilding morphologies + loading demos from {demos}", flush=True)
+    data = load_all(demos, args.variant, args.gamma, task=args.task)
+    if not data:
+        raise SystemExit(f"no *.npz demos found under {demos}")
+    # Memoize the jit'd fns by morphology OBJECT. The aggregated DAgger dir holds
+    # several iteration-tagged files per building, all sharing one cached `m`
+    # (load_all caches by (bt,idx)). Building a fresh eqx.filter_jit per FILE made
+    # the compiled-executable count grow with iterations: it0=20 files ok,
+    # it1=40 ok, it2=60 -> the critic phase's second compilation wave stacked on
+    # the resident policy cache and OOM'd the 16GB box. Keying by id(m) caps the
+    # count at the number of UNIQUE buildings, constant across iterations.
+    def _memo(make):
+        cache: dict = {}
+        def get(m):
+            k = id(m)
+            if k not in cache:
+                cache[k] = make(m)
+            return cache[k]
+        return get
+    _pg, _vg = _memo(make_policy_grad), _memo(make_value_grad)
+    _pl, _vl = _memo(make_policy_loss), _memo(make_value_loss)
+    pol_grads = [_pg(m) for _n, m, *_r in data]
+    val_grads = [_vg(m) for _n, m, *_r in data]
+    pol_losses = [_pl(m) for _n, m, *_r in data]
+    val_losses = [_vl(m) for _n, m, *_r in data]
     names = [n for n, *_r in data]
 
     if args.init is not None:
-        from morel_b2b_amorpheus import load_model
         init = args.init if os.path.isabs(args.init) else os.path.join(REPO, args.init)
-        model = load_model(init, d_model=64, n_heads=4, n_layers=3)
+        model = load_model(init, variant=args.variant, d_model=64, d_context=32,
+                           n_heads=4, n_layers=3)
         print(f"[init] resuming from {init}", flush=True)
     else:
-        model = make_model(d_model=64, n_heads=4, n_layers=3, seed=args.seed)
+        model = make_model(variant=args.variant, d_model=64, d_context=32,
+                           n_heads=4, n_layers=3, seed=args.seed)
     opt = optax.adam(args.lr)
     opt_state = opt.init(eqx.filter(model, eqx.is_array))
     rng = np.random.default_rng(args.seed)
@@ -190,12 +218,12 @@ def main():
         if step % 1000 == 0 or step == args.policy_steps - 1:
             mean, per = eval_all(pol_losses, data, model, "policy")
             worst = names[int(np.argmax(per))]
-            wandb.log({"bc/action_mse": mean, "bc/action_mse_best": min(per),
-                       "bc/action_mse_worst": max(per), "phase": 0}, step=step)
+            wandb.log({"dagger/action_mse": mean, "dagger/action_mse_best": min(per),
+                       "dagger/action_mse_worst": max(per), "phase": 0}, step=step)
             print(f"  step {step:6d}  action MSE (all bldgs) {mean:.5f}  "
                   f"[best {min(per):.4f} worst {max(per):.4f} @ {worst}]", flush=True)
 
-    # critic: value head only (policy frozen), so the value fit cannot move the trunk
+    # critic: value head only (policy frozen)
     opt_v = optax.adam(1e-3)
     opt_v_state = opt_v.init(eqx.filter(model, eqx.is_array))
     print(f"[critic] {args.value_steps} steps, policy frozen", flush=True)
@@ -212,16 +240,15 @@ def main():
         model = eqx.apply_updates(model, upd)
         if step % 1000 == 0 or step == args.value_steps - 1:
             mean, per = eval_all(val_losses, data, model, "value")
-            # offset the step so the critic phase continues past the policy phase
-            wandb.log({"bc/value_mse": mean, "bc/value_mse_best": min(per),
-                       "bc/value_mse_worst": max(per), "phase": 1},
+            wandb.log({"dagger/value_mse": mean, "dagger/value_mse_best": min(per),
+                       "dagger/value_mse_worst": max(per), "phase": 1},
                       step=args.policy_steps + step)
             print(f"  step {step:6d}  value MSE (all bldgs) {mean:.3f}  "
                   f"[best {min(per):.2f} worst {max(per):.2f}]", flush=True)
 
     save_model(model, out)
     wandb.finish()
-    print(f"[done] {out}\nBC_FIT_DONE", flush=True)
+    print(f"[done] {out}\nDAGGER_FIT_DONE", flush=True)
 
 
 if __name__ == "__main__":

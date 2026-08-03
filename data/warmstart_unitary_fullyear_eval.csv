@@ -1,0 +1,16 @@
+building_type,building_id,episode_return,n_steps,seed
+RestaurantFastFood,RestaurantFastFood-3997,-7691.010897887983,105120,0
+RetailStandalone,RetailStandalone-2997,-13114.478803160217,105120,0
+RetailStandalone,RetailStandalone-2998,-9861.411386927326,105120,0
+OfficeSmall,OfficeSmall-5996,-2579.1509635312714,105120,0
+RestaurantFastFood,RestaurantFastFood-3998,-7706.137288157986,105120,0
+RestaurantFastFood,RestaurantFastFood-3999,-2620.416512685747,105120,0
+OfficeSmall,OfficeSmall-5997,-1771.543613207926,105120,0
+RetailStandalone,RetailStandalone-2999,-8218.064793249876,105120,0
+OfficeSmall,OfficeSmall-5999,-2716.9028187968383,105120,0
+RestaurantFastFood,RestaurantFastFood-4000,-8130.274769580835,105120,0
+RetailStandalone,RetailStandalone-3000,-8849.631177155721,105120,0
+OfficeSmall,OfficeSmall-6000,-2807.0219979824565,105120,0
+RestaurantFastFood,RestaurantFastFood-3003,-4277.6976783602095,105120,0
+RetailStandalone,RetailStandalone-2035,-9152.531751707807,105120,0
+OfficeSmall,OfficeSmall-5014,-2275.7766901562695,105120,0

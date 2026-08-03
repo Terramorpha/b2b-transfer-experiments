@@ -1,0 +1,21 @@
+{
+  "building_type": "RestaurantFastFood",
+  "index": 1,
+  "split": "train",
+  "is_vav": false,
+  "tuned_return": -931.9417030877469,
+  "params": {
+    "kp": 1.369209069350519,
+    "ki": 0.02415891304339364,
+    "integral_max": 14.620624610012658,
+    "min_fan_fraction": 0.3844919588096426,
+    "sat_min_c": 8.943597953630732,
+    "sat_max_c": 54.733102701471424,
+    "sat_initial_c": 21.889356175277705,
+    "sat_trim": 0.7419982047923979,
+    "sat_respond": 2.4799821990925732,
+    "demand_deadband": 0.3215663810336616,
+    "availability_on": 2.1950314630722945,
+    "fan_error_mode": "nearest_setpoint"
+  }
+}

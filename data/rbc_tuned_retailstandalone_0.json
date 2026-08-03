@@ -1,0 +1,23 @@
+{
+  "building_id": "RetailStandalone-2997",
+  "building_type": "RetailStandalone",
+  "index": 0,
+  "n_trials": 25,
+  "tuned_return": -3913.6719680230535,
+  "rbc_nodeadband_return": -4016.1174300929174,
+  "rbc_default_return": -9217.334494428103,
+  "best_params": {
+    "kp": 0.24909266680099262,
+    "ki": 0.0008015402507719444,
+    "integral_max": 2.0782125111925396,
+    "min_fan_fraction": 0.33626650156093824,
+    "sat_min_c": 8.250500632199326,
+    "sat_max_c": 37.49228668588884,
+    "sat_initial_c": 18.62722888982018,
+    "sat_trim": 0.5445402548425542,
+    "sat_respond": 2.89593856186472,
+    "demand_deadband": 0.19885602096296706,
+    "availability_on": 2.208670017362562,
+    "fan_error_mode": "nearest_setpoint"
+  }
+}

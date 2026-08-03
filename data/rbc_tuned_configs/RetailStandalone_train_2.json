@@ -1,0 +1,21 @@
+{
+  "building_type": "RetailStandalone",
+  "index": 2,
+  "split": "train",
+  "is_vav": false,
+  "tuned_return": -2954.2288968207986,
+  "params": {
+    "kp": 0.3910706320730976,
+    "ki": 0.0007601868224220692,
+    "integral_max": 22.150505302829863,
+    "min_fan_fraction": 0.11683992672077773,
+    "sat_min_c": 8.844026954061558,
+    "sat_max_c": 37.03944185188486,
+    "sat_initial_c": 17.78079935708863,
+    "sat_trim": 0.8871459191013744,
+    "sat_respond": 2.1097878476946303,
+    "demand_deadband": 0.13322057952620558,
+    "availability_on": 1.740582593528143,
+    "fan_error_mode": "center_of_band"
+  }
+}

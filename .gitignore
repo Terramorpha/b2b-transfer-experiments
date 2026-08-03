@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 wandb/
 data/bc_demos/
+data/bc_demos_tuned/
+data/bc_demos_mlp/
+*.log

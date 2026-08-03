@@ -1,0 +1,23 @@
+{
+  "building_id": "RestaurantFastFood-3997",
+  "building_type": "RestaurantFastFood",
+  "index": 0,
+  "n_trials": 25,
+  "tuned_return": -3628.3635839661647,
+  "rbc_nodeadband_return": -6012.435928614499,
+  "rbc_default_return": -7701.41334384742,
+  "best_params": {
+    "kp": 0.17880229527994573,
+    "ki": 0.00010064637312437787,
+    "integral_max": 22.583836807502685,
+    "min_fan_fraction": 0.3416312348992173,
+    "sat_min_c": 5.037870613084527,
+    "sat_max_c": 37.53977421469424,
+    "sat_initial_c": 10.079699938879628,
+    "sat_trim": 0.6217265988978486,
+    "sat_respond": 4.210156681938865,
+    "demand_deadband": 0.24505071099920223,
+    "availability_on": 1.549927856262401,
+    "fan_error_mode": "nearest_setpoint"
+  }
+}

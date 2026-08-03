@@ -1,0 +1,33 @@
+{
+  "building_type": "OfficeMedium",
+  "index": 4,
+  "split": "train",
+  "is_vav": true,
+  "tuned_return": -2491.7403684320134,
+  "params": {
+    "sat_neutral": 18.420332084373573,
+    "sat_kp": 4.974356574665544,
+    "sat_min": 9.617023135465267,
+    "sat_max": 55.14133426779134,
+    "sat_rate_limit": 0.39692886764888546,
+    "outdoor_sat_gain": 0.10077301616382398,
+    "sat_cold_bias": 0.3833827291480381,
+    "sat_warm_bias": 1.2563080166150453,
+    "flow_base": 0.5038008188983798,
+    "flow_kp": 0.665140021653344,
+    "flow_ki": 0.0018995882644048073,
+    "flow_min": 0.45192651978057585,
+    "flow_max": 0.9332228165844237,
+    "flow_rate_limit": 0.08995472301560725,
+    "integral_max": 10.087827316398165,
+    "integral_decay": 0.8413883306673334,
+    "reheat_sp_min": 11.046030343860192,
+    "reheat_sp_max": 26.25027304899489,
+    "reheat_sp_deadband": 0.7549851977984114,
+    "reheat_sp_kp": 2.269784970485113,
+    "reheat_sp_rate_limit": 0.14250007468386403,
+    "clg_sp_default": 22.4175064300035,
+    "error_ema_alpha": 0.11804909285386175,
+    "sat_aware_flow": true
+  }
+}

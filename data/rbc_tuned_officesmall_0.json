@@ -1,0 +1,23 @@
+{
+  "building_id": "OfficeSmall-5996",
+  "building_type": "OfficeSmall",
+  "index": 0,
+  "n_trials": 25,
+  "tuned_return": -641.5256522789399,
+  "rbc_nodeadband_return": -752.9978341128291,
+  "rbc_default_return": -2183.739215921764,
+  "best_params": {
+    "kp": 0.17324884709937055,
+    "ki": 0.0005376916515593466,
+    "integral_max": 15.995784402678936,
+    "min_fan_fraction": 0.3343159323654516,
+    "sat_min_c": 6.581643982289446,
+    "sat_max_c": 43.28428461389958,
+    "sat_initial_c": 16.055496883729745,
+    "sat_trim": 0.1317374617641498,
+    "sat_respond": 3.2417481362359473,
+    "demand_deadband": 0.24261775806744365,
+    "availability_on": 2.752474560542044,
+    "fan_error_mode": "center_of_band"
+  }
+}
