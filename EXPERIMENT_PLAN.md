@@ -18,6 +18,21 @@ REMEMBER: never draft prose; tuned/best-of-two is the only bar; waiters armed on
 SPE-DAgger 2yr comfort ablation queued for free box; minergym adjacency fix UNCOMMITTED (push round pending:
 minergym + morel submodule + b2b-transfer scripts/figures); MLP rerun likely cut.
 
+## 🔧 DEPENDENCY MODEL MIGRATION (user directive 2026-08-06): kill submodules + hand-patching
+POLICY (effective now): **no hand-patching installed copies, ever.** Fixes land in the SOURCE repo
+(~/code_sync/maitrise/{morel,Building2Building,minergym}), get pushed, the commit pin is bumped, env rebuilt.
+DONE (phase 1, non-destructive): `requirements-pinned.txt` (all first-party deps pinned by commit:
+morel@89c0484 ×6 dists, b2b@698ca69, minergym@7520086) + `scripts/bootstrap_env.sh` (pinned or --dev
+editable-from-siblings) + `scripts/evaluate.py` (moved from vendor/morel root — was a loose module).
+PHASE 2 (ONLY WHEN BOX IDLE — running campaign uses the OLD venv at vendor/morel/.venv):
+  1. bash scripts/bootstrap_env.sh --dev  → new .venv at repo root
+  2. smoke: check_supply_symmetry --steps 5 (+ verify adjacency: 49 pairs on OfficeMedium-4001)
+  3. update launch wrappers/drivers: vendor/morel/.venv/bin/python → .venv/bin/python
+  4. git rm the vendor/ submodules + .gitmodules, commit, push
+  GOTCHAS: scripts sys.path-insert vendor/* (harmless once dirs gone); drivers hardcode the old venv path
+  (run_energy_ladder.sh, run_mlp_rerun.sh, PROF wrappers); wandb creds/netrc unaffected; guix profile
+  sourcing unchanged. The old venv's minergym hand-patch becomes irrelevant (pin 7520086 has the fix).
+
 ## ⚡ CURRENT SNAPSHOT 2026-08-06 — READ THIS FIRST after compression
 **FINAL RESULTS (all zero-shot on TEST, full-year, deterministic eval):**
 - **COMFORT (e0)** vs BO-tuned RBC (the bar; user directive: never default-RBC as headline):
