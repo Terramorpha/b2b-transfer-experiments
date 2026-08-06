@@ -61,14 +61,14 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "building2building", git = "ssh://git@github.com/vtaboga/Building2Building?rev=f4752f1a17407255d02f3878a67c00807aa55b1a" },
-    { name = "minergym", git = "ssh://git@github.com/Terramorpha/minergym?rev=75200862c49a8f192e2ea8996edefb8be1ed9b16" },
-    { name = "morel", git = "ssh://git@github.com/Terramorpha/morel?rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" },
-    { name = "morel-amorpheus", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_amorpheus&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" },
-    { name = "morel-b2b", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" },
-    { name = "morel-b2b-amorpheus", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_amorpheus&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" },
-    { name = "morel-b2b-modumorph", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_modumorph&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" },
-    { name = "morel-modumorph", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_modumorph&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" },
+    { name = "building2building", git = "ssh://git@github.com/vtaboga/Building2Building?rev=a608a7844321dda903e3797da64676ccaeef9861" },
+    { name = "minergym", git = "ssh://git@github.com/Terramorpha/minergym?rev=1cc47dea940119e718d140c09966254a1f8d4105" },
+    { name = "morel", git = "ssh://git@github.com/Terramorpha/morel?rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f" },
+    { name = "morel-amorpheus", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_amorpheus&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f" },
+    { name = "morel-b2b", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f" },
+    { name = "morel-b2b-amorpheus", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_amorpheus&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f" },
+    { name = "morel-b2b-modumorph", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_modumorph&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f" },
+    { name = "morel-modumorph", git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_modumorph&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f" },
 ]
 
 [[package]]
@@ -87,7 +87,7 @@ wheels = [
 [[package]]
 name = "building2building"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/vtaboga/Building2Building.git?rev=f4752f1a17407255d02f3878a67c00807aa55b1a#f4752f1a17407255d02f3878a67c00807aa55b1a" }
+source = { git = "ssh://git@github.com/vtaboga/Building2Building.git?rev=a608a7844321dda903e3797da64676ccaeef9861#a608a7844321dda903e3797da64676ccaeef9861" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "cattrs" },
@@ -607,7 +607,7 @@ wheels = [
 [[package]]
 name = "minergym"
 version = "0.1.1"
-source = { git = "ssh://git@github.com/Terramorpha/minergym?rev=75200862c49a8f192e2ea8996edefb8be1ed9b16#75200862c49a8f192e2ea8996edefb8be1ed9b16" }
+source = { git = "ssh://git@github.com/Terramorpha/minergym?rev=1cc47dea940119e718d140c09966254a1f8d4105#1cc47dea940119e718d140c09966254a1f8d4105" }
 dependencies = [
     { name = "gymnasium" },
     { name = "optree" },
@@ -650,7 +650,7 @@ wheels = [
 [[package]]
 name = "morel"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/Terramorpha/morel?rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185#b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+source = { git = "ssh://git@github.com/Terramorpha/morel?rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f#00eb51bf8b86c088e9ed51c610edfee0ad213f0f" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -659,7 +659,7 @@ dependencies = [
 [[package]]
 name = "morel-amorpheus"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_amorpheus&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185#b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_amorpheus&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f#00eb51bf8b86c088e9ed51c610edfee0ad213f0f" }
 dependencies = [
     { name = "equinox" },
     { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -671,7 +671,7 @@ dependencies = [
 [[package]]
 name = "morel-b2b"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185#b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f#00eb51bf8b86c088e9ed51c610edfee0ad213f0f" }
 dependencies = [
     { name = "building2building" },
     { name = "gitpython" },
@@ -681,7 +681,7 @@ dependencies = [
 [[package]]
 name = "morel-b2b-amorpheus"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_amorpheus&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185#b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_amorpheus&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f#00eb51bf8b86c088e9ed51c610edfee0ad213f0f" }
 dependencies = [
     { name = "morel" },
     { name = "morel-amorpheus" },
@@ -691,7 +691,7 @@ dependencies = [
 [[package]]
 name = "morel-b2b-modumorph"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_modumorph&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185#b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_b2b_modumorph&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f#00eb51bf8b86c088e9ed51c610edfee0ad213f0f" }
 dependencies = [
     { name = "morel" },
     { name = "morel-b2b" },
@@ -701,7 +701,7 @@ dependencies = [
 [[package]]
 name = "morel-modumorph"
 version = "0.0.1"
-source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_modumorph&rev=b5fd380ebb2fa3d048f4801d1d1c993b8c66d185#b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+source = { git = "ssh://git@github.com/Terramorpha/morel?subdirectory=third_party%2Fmorel_modumorph&rev=00eb51bf8b86c088e9ed51c610edfee0ad213f0f#00eb51bf8b86c088e9ed51c610edfee0ad213f0f" }
 dependencies = [
     { name = "equinox" },
     { name = "jax", version = "0.10.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },

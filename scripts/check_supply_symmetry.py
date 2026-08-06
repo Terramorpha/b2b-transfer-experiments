@@ -44,6 +44,9 @@ def main():
     ap.add_argument("--steps", type=int, default=1,
                     help=">1: roll the env executing the policy and report the MAX "
                          "pairwise supply-action deviation over the whole rollout")
+    ap.add_argument("--dump", default=None,
+                    help="write per-step per-node action traces to this .npz "
+                         "(for figures/build_supply_symmetry_figure.py)")
     args = ap.parse_args()
     ckpt = (args.checkpoint if os.path.isabs(args.checkpoint)
             else os.path.join(REPO, args.checkpoint))
@@ -65,10 +68,16 @@ def main():
     raw, _ = env.reset()
     max_dev = 0.0
     sup = {}
+    traces = []      # list of {nid: encoded_action_vec} per step (--dump only)
+    raw_traces = []  # full raw env action per step, real units (--dump only)
     for step in range(max(1, args.steps)):
         tca, tpa = sp(*lens.split_observation(source.split_observation(raw)))
         sup = {nid: np.asarray(encode(type_check(spaces[nid], v)), float)
                for nid, v in tpa.items() if "supply" in nid.lower()}
+        if args.dump:
+            traces.append(sup)
+            raw_traces.append(np.asarray(
+                source.join_actions(lens.join_actions((tca, tpa))), dtype=float))
         vals = list(sup.values())
         dev = max((float(np.max(np.abs(vals[0] - v))) for v in vals[1:]), default=0.0)
         max_dev = max(max_dev, dev)
@@ -84,6 +93,18 @@ def main():
     for nid, a in sup.items():
         print(f"  {nid[:60]:60s} {np.round(a, 6)}")
     print(f"max pairwise |action difference| over {step + 1} step(s): {max_dev:.3e}")
+    if args.dump:
+        node_ids = sorted(traces[0].keys())
+        arr = np.asarray([[t[nid] for nid in node_ids] for t in traces])
+        out = args.dump if os.path.isabs(args.dump) else os.path.join(REPO, args.dump)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        np.savez(out, actions=arr, node_ids=np.asarray(node_ids),
+                 raw_actions=np.asarray(raw_traces),
+                 action_names=np.asarray(list(env.metadata["action_names"])),
+                 bridge=args.bridge, checkpoint=args.checkpoint,
+                 building_type=args.building_type, split=args.split,
+                 index=args.index, max_dev=max_dev)
+        print(f"[dump] {out}  actions shape {arr.shape} (steps, nodes, act_dim)")
     vals = list(sup.values())
     identical = max_dev < 1e-12
     print("IDENTICAL:", identical)

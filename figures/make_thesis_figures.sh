@@ -122,4 +122,11 @@ echo "== trace diagnostics (policy vs RBC actions / fan speed) =="
 $PY figures/build_policy_vs_rbc_actions_figure.py
 $PY figures/build_fan_speed_figure.py
 
+echo "== vav_supply symmetry scatter (loops bit-identical along a rollout) =="
+# data/supply_symmetry_rollout.npz comes from a real rollout:
+#   $PY scripts/check_supply_symmetry.py --steps 1000 \
+#       --checkpoint runs/dagger_stream_e0_amorpheus_y2/model_s0.eqx \
+#       --dump data/supply_symmetry_rollout.npz
+$PY figures/build_supply_symmetry_figure.py
+
 echo "ALL_THESIS_FIGURES_DONE"
