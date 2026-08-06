@@ -53,13 +53,13 @@ OUR_BASELINES = os.path.join(REPO, "data", "rbc_fullyear_ourharness.json")
 def _worker(args):
     """Spawn-pool worker: one full-year rollout in its own process (EnergyPlus-safe).
     Top-level + picklable so it survives spawn."""
-    ckpt, bt, idx = args
-    ret, steps = policy_return(ckpt, bt, idx)
+    ckpt, bt, idx, split, task = args
+    ret, steps = policy_return(ckpt, bt, idx, split, task)
     return bt, idx, ret, steps
 
 
-def policy_return(ckpt, bt, idx):
-    env, source = _b2b_factory_impl(bt, idx, "test", TASK, RP)
+def policy_return(ckpt, bt, idx, split="test", task=TASK):
+    env, source = _b2b_factory_impl(bt, idx, split, task, RP)
     lens = AMORPHEUS_B2B_BRIDGE.apply(trivial_morphology(source))
     sp = amorpheus_policy(load_model(ckpt, d_model=64, n_heads=4, n_layers=3))(
         AMORPHEUS_B2B_BRIDGE.apply(source))
@@ -84,20 +84,27 @@ def main():
                     help="parallel rollout processes (one building each)")
     ap.add_argument("--building-types", nargs="+", default=None,
                     help="restrict to these types (default: all four)")
+    ap.add_argument("--split", default="test",
+                    help="dataset split to evaluate on (test or train)")
+    ap.add_argument("--task", default=TASK,
+                    help="b2b task preset (e.g. task_occ_emed for energy)")
+    ap.add_argument("--baselines", default=OUR_BASELINES,
+                    help="JSON {building_id: baseline_return} to compare against "
+                         "(default: our test default-RBC baseline)")
     args = ap.parse_args()
     if args.building_types is not None:
         global TYPES
         TYPES = args.building_types
     ckpt = args.checkpoint if os.path.isabs(args.checkpoint) else os.path.join(REPO, args.checkpoint)
 
-    with open(OUR_BASELINES) as f:
+    with open(args.baselines) as f:
         base = json.load(f)
     reg = get_registry()
 
     # idx-major ordering => the first wave is one building of EACH type, so a
     # first cross-type read arrives early instead of after all of Retail.
-    tasks = [(ckpt, bt, idx) for idx in range(N) for bt in TYPES]
-    ids = {(bt, idx): reg.get_building_by_index(bt, "test", idx).building_id
+    tasks = [(ckpt, bt, idx, args.split, args.task) for idx in range(N) for bt in TYPES]
+    ids = {(bt, idx): reg.get_building_by_index(bt, args.split, idx).building_id
            for bt in TYPES for idx in range(N)}
 
     rows, brows = [], []

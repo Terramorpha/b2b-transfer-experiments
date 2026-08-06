@@ -97,8 +97,8 @@ def _select_policy(bt: str, bid: str, env):
     return pol, cz
 
 
-def bo_return(bt, idx, bid):
-    env, _source = _b2b_factory_impl(bt, idx, "test", TASK, RP)
+def bo_return(bt, idx, bid, task=TASK):
+    env, _source = _b2b_factory_impl(bt, idx, "test", task, RP)
     pol, cz = _select_policy(bt, bid, env)
     raw, _ = env.reset(); pol.reset()
     ret, steps = 0.0, 0
@@ -114,14 +114,16 @@ def bo_return(bt, idx, bid):
 
 def _worker(args):
     """Spawn-pool worker: one full-year BO-RBC rollout in its own process."""
-    bt, idx, bid = args
-    ret, steps, cz = bo_return(bt, idx, bid)
+    bt, idx, bid, task = args
+    ret, steps, cz = bo_return(bt, idx, bid, task)
     return bt, idx, ret, steps, cz
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tag", default="pertype_bo")
+    ap.add_argument("--task", default=TASK,
+                    help="b2b task preset (e.g. task_occ_emed for the energy bar)")
     ap.add_argument("--n-workers", type=int, default=3)
     ap.add_argument("--building-types", nargs="+", default=None)
     args = ap.parse_args()
@@ -136,7 +138,7 @@ def main():
     ids = {(bt, idx): reg.get_building_by_index(bt, "test", idx).building_id
            for bt in TYPES for idx in range(N)}
     # idx-major ordering => first wave is one building of EACH type.
-    tasks = [(bt, idx, ids[(bt, idx)]) for idx in range(N) for bt in TYPES]
+    tasks = [(bt, idx, ids[(bt, idx)], args.task) for idx in range(N) for bt in TYPES]
 
     rows, brows = [], []
     print(f"[eval-bo] {len(tasks)} full-year BO-RBC rollouts | {args.n_workers} "

@@ -80,11 +80,11 @@ def _suggest_air_loop(trial):
     )
 
 
-def _rollout(params, bt, idx, split):
+def _rollout(params, bt, idx, split, task=TASK):
     is_vav = bt == "OfficeMedium"
     cfg = AirLoopConfig(**params) if is_vav else UnitaryHvacConfig(**params)
     pol = AirLoopPolicy(cfg) if is_vav else UnitaryHvacPolicy(cfg)
-    env = b2b.make_env(bt, split=split, index=idx, task=TASK, run_period=RP)
+    env = b2b.make_env(bt, split=split, index=idx, task=task, run_period=RP)
     pol.bind_env(env)
     raw, _ = env.reset()
     pol.reset()
@@ -105,18 +105,27 @@ def main():
     ap.add_argument("--index", type=int, default=0)
     ap.add_argument("--split", default="train")
     ap.add_argument("--n-trials", type=int, default=25)
+    ap.add_argument("--task", default=TASK,
+                    help="b2b task preset = the tuning OBJECTIVE "
+                         "(task_occ_e0 comfort, task_occ_emed comfort+energy)")
+    ap.add_argument("--out-dir", default=CONFIG_DIR,
+                    help="where the winning config json goes "
+                         "(use a separate dir per objective!)")
     args = ap.parse_args()
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+    out_dir = (args.out_dir if os.path.isabs(args.out_dir)
+               else os.path.join(REPO, args.out_dir))
     is_vav = args.building_type == "OfficeMedium"
     suggest = _suggest_air_loop if is_vav else _suggest_unitary
     bid = get_registry().get_building_by_index(
         args.building_type, args.split, args.index).building_id
     print(f"[tune] {bid} ({'VAV' if is_vav else 'unitary'}) {args.split} "
-          f"full-year comfort, {args.n_trials} trials", flush=True)
+          f"full-year {args.task}, {args.n_trials} trials", flush=True)
 
     def objective(trial):
-        r = _rollout(suggest(trial), args.building_type, args.index, args.split)
+        r = _rollout(suggest(trial), args.building_type, args.index, args.split,
+                     task=args.task)
         print(f"  {bid} trial {trial.number:2d}: {r:10.1f}", flush=True)
         return r
 
@@ -125,11 +134,12 @@ def main():
         sampler=optuna.samplers.TPESampler(n_startup_trials=8, seed=42))
     study.optimize(objective, n_trials=args.n_trials)
 
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    out = os.path.join(CONFIG_DIR, f"{args.building_type}_{args.split}_{args.index}.json")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, f"{args.building_type}_{args.split}_{args.index}.json")
     with open(out, "w") as f:
         json.dump({"building_type": args.building_type, "index": args.index,
-                   "split": args.split, "is_vav": is_vav,
+                   "split": args.split, "is_vav": is_vav, "task": args.task,
+                   "building_id": bid,
                    "tuned_return": study.best_value, "params": study.best_params}, f, indent=2)
     print(f"[done] {bid} tuned={study.best_value:.1f} -> {out}\nTUNE_DONE", flush=True)
 

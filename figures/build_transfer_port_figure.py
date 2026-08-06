@@ -72,6 +72,8 @@ def main() -> None:
     # specialist "oracle"). When given, a second series is drawn + a legend.
     ap.add_argument("--ceiling-json", default=None)
     ap.add_argument("--ceiling-label", default="Specialist")
+    ap.add_argument("--reference-label", default="Baseline (G36)",
+                    help="label for the normalized-return reference line (=1.0 baseline)")
     args = ap.parse_args()
     figdir, prefix = args.outdir, args.prefix
     clabel = args.ceiling_label if args.ceiling_json else None
@@ -107,7 +109,7 @@ def main() -> None:
         # "Normalized return" label goes ONCE in LaTeX, centred under the row.
         grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel),
                      value_label=None, invert=False, reference=1.0,
-                     reference_label="Baseline (G36)")
+                     reference_label=args.reference_label)
         if i == 0:
             ax.set_ylabel("Building")
         save(fig, os.path.join(figdir, f"{prefix}_{short.lower()}"))
@@ -125,7 +127,7 @@ def main() -> None:
         ax.grid(axis="y", visible=False)
         grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel),
                      value_label=None, invert=False, reference=1.0,
-                     reference_label="Baseline (G36)")
+                     reference_label=args.reference_label)
         ax.set_title(short)
     axes[0].set_ylabel("Building")
     fig.supxlabel(VALUE_LABEL)

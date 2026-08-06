@@ -103,6 +103,9 @@ def main():
                     help="BC clone to warm-start from; its obs_norm.npz is loaded too")
     ap.add_argument("--eval-every", type=int, default=0,
                     help="eval (full year) every N updates; 0 = only at the end")
+    ap.add_argument("--freeze-norm", action="store_true",
+                    help="do NOT update the obs-normalizer during training; use the "
+                         "seeded/demo-derived stats as-is. Recommended for warm-start.")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     out = args.out if os.path.isabs(args.out) else os.path.join(REPO, args.out)
@@ -173,13 +176,15 @@ def main():
 
     global_step = 0
     for upd in range(n_updates):
-        O, A_raw, LP, R, V, EP, BOOT = [], [], [], [], [], [], []
+        O, O_raw, A_raw, LP, R, V, EP, BOOT = [], [], [], [], [], [], [], []
         for _ in range(args.n_steps):
-            on = norm.norm(obs[None])[0].astype(np.float32)
+            raw_obs = obs.astype(np.float32)            # RAW obs (for the normalizer)
+            on = norm.norm(raw_obs[None])[0].astype(np.float32)
             key, sk = jax.random.split(key)
             a01, raw, logp, val = act(model, jnp.asarray(on), sk)
             nobs, rew, term, trunc, _ = _step(env, _to_env(a01, lo, hi))
-            O.append(on); A_raw.append(np.asarray(raw))  # store the RAW sample verbatim
+            O.append(on); O_raw.append(raw_obs)          # network sees `on`; norm updates on RAW
+            A_raw.append(np.asarray(raw))  # store the RAW action sample verbatim
             LP.append(float(logp)); R.append(rew); V.append(float(val))
             end = term or trunc
             EP.append(1.0 if end else 0.0)
@@ -192,7 +197,9 @@ def main():
             global_step += 1
         last_val = float(value(model, jnp.asarray(norm.norm(obs[None])[0],
                                                   dtype=jnp.float32)))
-        O = np.asarray(O, np.float32); norm.update(O)  # normalizer sees this batch
+        O = np.asarray(O, np.float32)
+        if not args.freeze_norm:
+            norm.update(np.asarray(O_raw, np.float32))  # FIX: update on RAW obs, not normalized
         adv, ret = compute_gae(np.asarray(R, np.float32), np.asarray(V, np.float32),
                                np.asarray(EP), np.asarray(BOOT, np.float32),
                                last_val, args.gamma, args.gae_lambda)
