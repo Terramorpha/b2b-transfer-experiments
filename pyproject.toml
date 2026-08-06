@@ -24,6 +24,10 @@ dependencies = [
     "morel-modumorph",
     "building2building",
     "minergym",
+    # driver-script deps (training loggers, tuners, figures)
+    "wandb",
+    "optuna",
+    "matplotlib",
 ]
 
 [tool.uv]
