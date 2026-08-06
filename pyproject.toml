@@ -1,17 +1,20 @@
 # Experiment-driver project: dependencies on our own libraries are declared BY
 # COMMIT via [tool.uv.sources] (the replacement for git submodules).
 #
-# Bump a dependency: edit its `rev`, then `uv lock && uv sync`.
-# Local development against sibling checkouts instead of pins:
-#   scripts/bootstrap_env.sh --dev   (uv sync, then editable overrides)
+# The pin chain is coherent end-to-end: this file pins morel and b2b by sha;
+# b2b@f4752f1 itself pins minergym@7520086 (adjacency fix); morel@b5fd380's
+# morel_b2b pins that same b2b sha. No override-dependencies needed.
+#
+# Bump a dependency: edit its rev, then `uv lock && uv sync`.
+# Local development against sibling checkouts: scripts/bootstrap_env.sh --dev
 #
 # POLICY: never hand-edit installed copies. A fix lands in its source repo,
-# is pushed, the rev here is bumped, and the env is re-synced.
+# is pushed, the rev chain is bumped bottom-up, and the env is re-synced.
 [project]
 name = "b2b-transfer-experiments"
 version = "0.1.0"
 description = "Morphology-agnostic HVAC transfer experiments on Building2Building"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "morel",
     "morel-amorpheus",
@@ -25,19 +28,13 @@ dependencies = [
 
 [tool.uv]
 package = false
-# b2b's own pyproject pins minergym to an older fork (vtaboga/minergym@956c3e1);
-# force OUR adjacency-fixed commit everywhere:
-override-dependencies = [
-    "building2building @ git+ssh://git@github.com/vtaboga/Building2Building@698ca69ab35655247caae59062b9ab07ceea7b48",
-    "minergym @ git+ssh://git@github.com/Terramorpha/minergym@75200862c49a8f192e2ea8996edefb8be1ed9b16",
-]   # scripts repo: manage the env, don't build/install this project
 
 [tool.uv.sources]
-morel = { git = "ssh://git@github.com/Terramorpha/morel", rev = "89c04843808d82134ef3c3da1abe9b4248319a78" }
-morel-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "89c04843808d82134ef3c3da1abe9b4248319a78", subdirectory = "third_party/morel_amorpheus" }
-morel-b2b = { git = "ssh://git@github.com/Terramorpha/morel", rev = "89c04843808d82134ef3c3da1abe9b4248319a78", subdirectory = "third_party/morel_b2b" }
-morel-b2b-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "89c04843808d82134ef3c3da1abe9b4248319a78", subdirectory = "third_party/morel_b2b_amorpheus" }
-morel-b2b-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "89c04843808d82134ef3c3da1abe9b4248319a78", subdirectory = "third_party/morel_b2b_modumorph" }
-morel-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "89c04843808d82134ef3c3da1abe9b4248319a78", subdirectory = "third_party/morel_modumorph" }
-building2building = { git = "ssh://git@github.com/vtaboga/Building2Building", rev = "698ca69ab35655247caae59062b9ab07ceea7b48" }
+morel = { git = "ssh://git@github.com/Terramorpha/morel", rev = "b5fd380ebb2fa3d048f4801d1d1c993b8c66d185" }
+morel-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "b5fd380ebb2fa3d048f4801d1d1c993b8c66d185", subdirectory = "third_party/morel_amorpheus" }
+morel-b2b = { git = "ssh://git@github.com/Terramorpha/morel", rev = "b5fd380ebb2fa3d048f4801d1d1c993b8c66d185", subdirectory = "third_party/morel_b2b" }
+morel-b2b-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "b5fd380ebb2fa3d048f4801d1d1c993b8c66d185", subdirectory = "third_party/morel_b2b_amorpheus" }
+morel-b2b-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "b5fd380ebb2fa3d048f4801d1d1c993b8c66d185", subdirectory = "third_party/morel_b2b_modumorph" }
+morel-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "b5fd380ebb2fa3d048f4801d1d1c993b8c66d185", subdirectory = "third_party/morel_modumorph" }
+building2building = { git = "ssh://git@github.com/vtaboga/Building2Building", rev = "f4752f1a17407255d02f3878a67c00807aa55b1a" }
 minergym = { git = "ssh://git@github.com/Terramorpha/minergym", rev = "75200862c49a8f192e2ea8996edefb8be1ed9b16" }
