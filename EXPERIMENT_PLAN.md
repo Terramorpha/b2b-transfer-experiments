@@ -1,5 +1,168 @@
 # Experiment Plan — DAgger + energy ladder (LIVING DOC)
 
+# ═══════════ MASTER SNAPSHOT 2026-08-06 (supersedes everything below — read ONLY this first) ═══
+
+### SPE INVERSION VERDICT 2026-08-07 (comfort, test — USER HYPOTHESIS CONFIRMED)
+data/spe_y2_test_fullyear_eval.csv vs plain-y2: SPE WORSE on 15/20. Per type
+(spe/plain): OfficeMedium **2.40x worse, 0/5** — breaking the forced supply symmetry
+LOST most of the OfficeMedium margin, exactly as the user predicted (accidental-ensemble
+/ Jensen mechanism now demonstrated by INTERVENTION, not just analysis). Restaurant
+1.82x, OffSmall 1.36x also worse (PE features hurt even without a symmetry to break);
+Retail 0.87x BETTER 5/5. NUANCE: SPE still beats tuned RBC 5/5 on OfficeMedium
+(≈0.50x vs plain's 0.23x) — the VAV structural win survives, halved. vs default: 18/20.
+Mechanism companion: check_supply_symmetry --bridge spe on the trained ckpt + off-diagonal
+scatter (figures_out/supply_symmetry_scatter_spe_*, data/supply_symmetry_rollout_spe.npz).
+Comfort ladder is now CLOSED: from-scratch → BC → DAgger y1 → y2 → +PPO → +SPE.
+
+### OA-CLAMP VERDICT 2026-08-07 night — THE ENERGY CHAPTER'S FINAL NUMBER
+Safety-layer eval (OA floored at 1.37 kg/s design intake, policy NOT retrained):
+data/emed_fromscratch_5y_oaclamp_fullyear_eval.csv, OfficeMedium test, full year.
+CLAMPED vs energy-tuned RBC: **0/5, norm 1.127** (unclamped was 5/5 @ 0.669).
+CLAMPED vs default RBC: 5/5 @ 0.850. Winter-week probe's 10% edge did NOT
+generalize (summer pays comfort; off-distribution under clamp).
+MECHANISM LEDGER (branched rollouts, data/branch_compare_*): the OfficeMedium
+energy win = OA-starvation exploit (~90% of winter gap; ALL of the tuned-bar
+margin over a year) + legitimate levers (thermal-mass coasting, no morning
+boost, asymmetric deadband) worth beating the DEFAULT config by 15% but not
+tuning. Reward-design finding for b2b: emed needs a ventilation floor/IAQ term.
+Caveat everywhere: clamp eval is a LOWER bound (policy never trained under it).
+Figures: branch_oa_flow, branch_sat_vs_outdoor, branch_cum_{energy,gas,comfort},
+branch_traces, branch_sat (all in driver). EXPERIMENTS NOW TRULY COMPLETE.
+
+### CONTINUATION (5.1y) VERDICT 2026-08-07 evening — EXPERIMENTS COMPLETE
+data/emed_fromscratch_5y_test_fullyear_eval.csv (renamed from *_y2_* — "5y" says what
+it is; figure prefix likewise emed_fromscratch_5y_vs_tuned). vs default: 20/20 (first-ever sweep).
+vs ENERGY-TUNED bar: 5/20 (2.6y was 7/20). Per type (5.1y/2.6y/tuned means):
+OfficeMedium −27.7k/−30.4k/−41.4k — **5/5 @ 0.669x, margin GREW** (0.737→0.669);
+Retail −95.3k/−124.8k/−48.2k — improved 5/5 vs itself, still 2.0x behind tuned;
+Restaurant −28.3k/−28.6k/−24.8k — plateaued at 1.16x;
+OfficeSmall −60.0k/−49.4k/−52.5k — **REGRESSED** (0.943→1.146, lost its 2 wins;
+multi-type interference: capacity reallocated to Retail/OffMed at OffSmall's cost).
+STORY: more training deepens the structural (VAV) win and keeps lifting Retail, but is
+NOT uniformly better — single-seed caveat. Figures: emed_fromscratch{,_y2}_vs_tuned
+(both in driver). ppoft figure DROPPED from driver (user 2026-08-07); anchoring finding
+stays in text (from-scratch beats y2+PPO 16/20; CSVs retained).
+NOTHING LEFT RUNNING. Remaining chores: vendor/ removal + final push; optional
+energy-decomposition eval if user asks; FREEZE otherwise.
+
+### FROM-SCRATCH EMED VERDICT 2026-08-07 (test, full year, deterministic)
+data/emed_fromscratch_test_fullyear_eval.csv | vs DEFAULT RBC: 17/20 (norm 0.48–1.06).
+vs ENERGY-TUNED RBC: **OfficeMedium 5/5 @ 0.737x — THE positive energy result**;
+OfficeSmall 2/5 @ 0.943 (competitive); Restaurant 0/5 @ 1.17; Retail 0/5 @ 2.60. Total 7/20.
+vs y2+PPO (imitation lineage): 16/20 → imitation warm-start ANCHORS on energy; from-scratch
+learns better strategies given years. Figure: figures_out/emed_fromscratch_vs_tuned_*.
+CONTINUATION LAUNCHED (user plan): +5.376M steps (2.56y more, total ~5.1y) from
+model_s0.eqx, same hypers (lr 5e-5, ent 0.01), out runs/emed_fromscratch_amorpheus_y2,
+python PID 18301, waiter bz5nybz6y (~7h+, slowed by SPE eval). On exit: same test eval
+(tag emed_fromscratch_y2_test) → does OffMed margin grow / OffSmall flip / Restaurant close?
+
+### STATUS 2026-08-07 early AM
+- SPE y1 DONE (runs/dagger_stream_spe_amorpheus, wandb 3w1fh3hr, imit_mse→~0.04).
+- SPE y2 DONE on attempt 2 (runs/dagger_stream_spe_amorpheus_y2/model_s0.eqx, 194 cycles;
+  attempt 1 died silently ~cycle 7 — transient memory pressure, RSS steady 5.6G on retry).
+- SPE-y2 comfort TEST eval RUNNING (--bridge spe flag added to eval_fullyear_panel.py;
+  tag spe_y2_test, 2 workers, waiter balg9hzfk). Compare vs plain-y2 → inversion verdict.
+  THEN mechanism check: check_supply_symmetry --bridge spe --checkpoint spe_y2 --steps 1000
+  (+ scatter figure companion, off-diagonal).
+- From-scratch emed TEST eval 13/20 (waiter b0iq0drd2): PATTERN HOLDING — from-scratch BEATS
+  energy-tuned RBC on OfficeMedium (−28.1k/−31.3k/−26.3k vs et≈−38k+) and OfficeSmall,
+  loses Restaurant (~25% behind) and Retail. Also beats y2+PPO on most buildings →
+  imitation warm-start ANCHORS the policy on the energy task; from-scratch finds better
+  energy strategies. Continuation (--init-checkpoint runs/emed_fromscratch_amorpheus/
+  model_s0.eqx, ~7h per 2.5y) = next launch after evals per user plan.
+
+### USER PLAN 2026-08-06 (binding — supersedes oracle-rule question)
+1. COMFORT ladder closes with the SPE experiment (one arm, y1+y2 protocol, --bridge spe,
+   eval vs plain-y2; recipe recorded below). Launch on from-scratch exit (waiter byp3b9b4r).
+2. ENERGY section pivots to the FROM-SCRATCH arc: eval the finished 2.56y emed from-scratch
+   run on test (run alongside SPE, 3 workers), read it against the ladder + energy-tuned bar,
+   and PERHAPS CONTINUE training from its final checkpoint (--init-checkpoint
+   runs/emed_fromscratch_amorpheus/model_s0.eqx) — decision after seeing the eval.
+   Rationale: wandb shows the emed run still steeply improving at 2.5y (OffMed −1167→−742→−435
+   same-season YoY) while the comfort 2.56y run had plateaued by yr2 → comfort failure was
+   convergence-to-worse, emed may be genuine undertraining. Timing note: from-scratch does
+   2.56y in ~7h wall (69s/update) → continuation cheap; can slot around SPE on the 4 cores.
+   Per-building emed oracle campaign: NOT launched (superseded by this plan).
+
+### RE-JUDGMENT VERDICT 2026-08-06 (FINAL for the energy ladder)
+Energy-tuned per-(type,CZ) RBC by TABLE LOOKUP on emed test (realistic deployment,
+data/emedtuned_rbc_test_fullyear_eval.csv): policy (DAgger-y2→critic-yr→PPO) wins
+**2/20 vs energy-tuned and 2/20 vs best-of-three** (was 13/20 vs best-of-two).
+Per type (norm = policy/tuned): Retail 3.34x 0/5 | Restaurant 1.15x 0/5 |
+**OfficeMedium 1.025x 2/5 (near-parity)** | OffSmall 1.81x 0/5.
+THESIS FRAME (honest reframe, pre-agreed): the energy headroom the policy captured
+via RL was mostly capturable by tuning the RBC too; the learning pipeline's genuine
+advantage is STRUCTURAL (VAV/OfficeMedium: decisive comfort wins 5/5 at 0.23x,
+energy near-parity 2/5 — the only type where it holds). Figure with the tuned bar:
+figures_out/emed_ppoft_vs_tuned_* (in make_thesis_figures.sh, conditional block).
+ORACLE RULE TRIGGERED but NOT LAUNCHED: per-type tuned RBC "did well" → user rule says
+per-building emed oracle tuning goes ahead; NOT launched because (a) ~2 days of BO on
+4 cores collides with SPE (the last planned experiment) and the Aug-8 freeze,
+(b) its downstream consumer (specialists-distillation) is parked as future work.
+USER DECISION NEEDED: launch oracle campaign anyway (pushes freeze) or keep SPE-only.
+
+### UPDATE 2026-08-06 evening (campaign wake executed; PIN CHAIN REPAIRED)
+- emed BO campaign DONE 11/11. Energy-tuned RBC ≈ 40–55% better than old bars on
+  train instances (OffMed ≈ −31k vs −52.6k comfort-BO; OffSmall ≈ −47k vs −104k default).
+- Lookup-apply eval RUNNING (PID 13157, log runs/eval_emedtuned_rbc_test.log, waiter beer1p8bx):
+  scripts/eval_fullyear_emedtuned_rbc.py → data/emedtuned_rbc_test_fullyear_eval.csv + prints
+  the 13/20 RE-JUDGMENT (policy vs emed-tuned bar and vs best-of-three). Early test rows confirm
+  strong bar (OffMed-4997 −38.6k, Retail-2999 −52.5k) → headline likely falls; honest-reframe ready.
+- PIN CHAIN REPAIRED: pinned minergym@7520086 was the WRONG LINEAGE — vendor venv carried
+  uncommitted eplus_output_dir/close() changes (b2b calls that API) and predates master's
+  callback-robustness/max_steps commits. Venv state committed as minergym@1cc47de
+  ("experiment-state snapshot", branch actuators). Chain now: experiments@80d0fda →
+  morel@00eb51b → b2b@a608a78 (transfer-experiments) → minergym@1cc47de. uv lock+sync clean;
+  smoke OK (env steps; morphology has 98 thermal_adjacency edges — adjacency fix live).
+  NOTE: vendor checkouts (morel@00eb51b, b2b@a608a78) match pins; scripts' vendor sys.path
+  inserts are therefore coherent with .venv until vendor/ removal.
+- SPE-DAgger y1 launch DEFERRED to from-scratch exit (4 cores, load ~8; waiter byp3b9b4r fires).
+  Exact y1 recipe (wandb 5rozr5y7): dagger_stream_amorpheus.py --bridge spe, seed 0,
+  total_steps 2e6, beta_half_life 2e5, n_steps 512, minibatch 256, lr 3e-4, value_lr 1e-3,
+  buffer_cap 100000 (cap_each 5000), updates_per_cycle 32, snapshot_every 50,
+  out runs/dagger_stream_e0_spe → then y2 continuation (--init-checkpoint, same protocol as plain y2).
+  Launch on .venv/bin/python (new pinned venv).
+- Supply-symmetry rollout figure DONE: figures_out/supply_symmetry_scatter.pdf (loop2-vs-loop1
+  identity scatter, 1000 steps, max |Δ| = 0.0; data data/supply_symmetry_rollout.npz via
+  check_supply_symmetry.py --dump; in make_thesis_figures.sh).════════
+## WHAT THE THESIS HAS (banked, final, all zero-shot TEST, deterministic evals):
+- **Comfort**: 6-method sweep done. Tuned(BO per-type,CZ) RBC unbeaten on single-zone (all methods 1.1-1.7x).
+  **DAgger-y2 surpasses tuned RBC on VAV 5/5 @ 0.23x** (pure imitation). Mechanism proven: supply-node
+  symmetry collapse (bit-identical actions, 0.0 dev/500 steps) + teacher-noise conditional-mean smoothing.
+- **Energy (emed)**: **y2→critic-yr→PPO(1yr) = 13/20 vs best-of-two RBC** (OffMed 5/5 @.80, Restaurant 5/5
+  @.93, OffSmall 3/5, Retail 0/5 @1.66). PENDING FINAL JUDGMENT vs the energy-tuned bar (campaign running).
+  Frozen-y2 alone: 2/20 (imitation can't reach energy levers). Retraction on file: never compare
+  sampled-vs-deterministic rollouts.
+- Infrastructure: streaming DAgger (+--critic-only, +--bridge spe), SPE bridge (zero-training symmetry-break
+  demo PASSED), adjacency bug FIXED (minergym 7520086), figures 1-command reproducible, symmetry+dot assets
+  for the OfficeMedium section, **pin-chain dep model** (experiments@62c41f2 → morel@b5fd380 →
+  b2b@f4752f1 → minergym@7520086; uv lock clean, NO overrides).
+## RUNNING (old venv vendor/morel/.venv — cutover blocked on these):
+- emed-BO campaign PID 9716 (~42%, ETA ~15h from 08-06 late): per-(type,CZ) energy-tuned RBC.
+- from-scratch emed PID 9087 (150/373, ~5 upd/h contended → ~4-6h after campaign ends).
+## THE PIPELINE ON WAKES (all waiter-armed, execute without prompting):
+1. CAMPAIGN WAKE → (a) `uv sync` new .venv + smoke (check_supply_symmetry --steps 5; adjacency=49 pairs);
+   (b) WRITE+RUN lookup-apply eval: per-(type,CZ) emed-tuned configs (data/rbc_emed_tuned_pertypecz/) →
+   emed test → **re-judge the 13/20** (THE decisive number; if OffMed survives, headline stands);
+   (c) user's oracle rule: per-building emed oracles ONLY IF the per-type tuned RBC "does well";
+   (d) launch on NEW venv: SPE-DAgger 2yr comfort (--bridge spe, y1+y2 protocol) + decomposition eval
+   (comfort-term vs energy-term per controller/policy).
+2. FROM-SCRATCH EXIT → eval on emed test (new venv) → THEN: git rm vendor/ + .gitmodules, repoint driver
+   interpreter paths (run_energy_ladder.sh, run_mlp_rerun.sh use vendor/morel/.venv), push.
+3. SPE WAKE → eval vs y2 → inversion-hypothesis verdict (SPE hurts VAV = symmetry-was-the-regularizer;
+   helps/neutral = reinjection validated). Either is thesis-grade.
+4. FINAL FIGURES: emed summary (with energy-tuned bar) + SPE ablation panel, via make_thesis_figures.sh.
+## STRATEGY (think-hard, 2026-08-06): deadline ~08-11. Compute fits with ~2 days slack; USER WRITING is the
+binding constraint. EXPERIMENT FREEZE after SPE+tuned-bar land (~08-08): no new runs after that, only evals/
+figures. If the energy-tuned RBC beats our 13/20 broadly → honest reframe: "energy headroom is real but
+capturable by tuning too; learning wins remain VAV(+Restaurant?)" — watch OfficeMedium specifically.
+DROPPED/PARKED: bctuned_train (user: don't care), MLP rerun (advisor bug fixed, rerun likely cut — figure
+stays quarantined), specialists-distillation (future work), 5-year run (killed).
+## STANDING RULES: never draft thesis prose; tuned/best-of-two only as bar; no hand-patching (pin chain!);
+morel edits in ~/code_sync/maitrise/morel? NO — vendor/morel until cutover, THEN sibling checkouts + pins;
+pub_style for figures; arm waiters + act on wake; EXPERIMENT_PLAN.md is source of truth, update on events.
+# ═══════════════════════════════════════════════════════════════════════════════════════════
+
 ## 📌 USER'S PLAN (2026-08-06 late — the governing sequence):
 1. BO energy&comfort-tuning of the ORACLES (per-building).  ⚠️ DISCREPANCY FLAGGED: what is ACTUALLY
    running is step 2's per-(type,CZ) campaign (PID 9716, 11 pairs on TRAIN instances → test lookup).

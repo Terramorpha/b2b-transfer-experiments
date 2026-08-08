@@ -32,9 +32,14 @@ import pandas as pd
 
 from building2building.data.registry import get_registry
 from morel_amorpheus import amorpheus_policy
-from morel_b2b_amorpheus import AMORPHEUS_B2B_BRIDGE, load_model
+from morel_b2b_amorpheus import (AMORPHEUS_B2B_BRIDGE, AMORPHEUS_B2B_SPE_BRIDGE,
+                                 AMORPHEUS_B2B_SPE_UNIVERSE, load_model)
 from morel.morphology import trivial_morphology
 from evaluate import _b2b_factory_impl
+
+# bridge name -> (bridge, universe-for-load_model); mirrors dagger_stream
+BRIDGES = {"plain": (AMORPHEUS_B2B_BRIDGE, None),
+           "spe": (AMORPHEUS_B2B_SPE_BRIDGE, AMORPHEUS_B2B_SPE_UNIVERSE)}
 
 TYPES = ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall"]
 TASK, RP, N, MAX_STEPS = "task_occ_e0", "full_year", 5, 106000  # full year = 105_120 steps
@@ -53,21 +58,28 @@ OUR_BASELINES = os.path.join(REPO, "data", "rbc_fullyear_ourharness.json")
 def _worker(args):
     """Spawn-pool worker: one full-year rollout in its own process (EnergyPlus-safe).
     Top-level + picklable so it survives spawn."""
-    ckpt, bt, idx, split, task = args
-    ret, steps = policy_return(ckpt, bt, idx, split, task)
+    ckpt, bt, idx, split, task, bridge, clamp_oa = args
+    ret, steps = policy_return(ckpt, bt, idx, split, task, bridge, clamp_oa)
     return bt, idx, ret, steps
 
 
-def policy_return(ckpt, bt, idx, split="test", task=TASK):
+def policy_return(ckpt, bt, idx, split="test", task=TASK, bridge="plain",
+                  clamp_oa=None):
     env, source = _b2b_factory_impl(bt, idx, split, task, RP)
-    lens = AMORPHEUS_B2B_BRIDGE.apply(trivial_morphology(source))
-    sp = amorpheus_policy(load_model(ckpt, d_model=64, n_heads=4, n_layers=3))(
-        AMORPHEUS_B2B_BRIDGE.apply(source))
+    br, universe = BRIDGES[bridge]
+    lens = br.apply(trivial_morphology(source))
+    sp = amorpheus_policy(load_model(ckpt, d_model=64, n_heads=4, n_layers=3,
+                                     universe=universe))(br.apply(source))
+    an = [str(n).lower() for n in env.metadata["action_names"]]
+    oa_i = np.array([i for i, n in enumerate(an)
+                     if "outdoor air controller" in n and "mass flow" in n])
     raw, _ = env.reset()
     ret, steps = 0.0, 0
     for _t in range(MAX_STEPS):
         tca, tpa = sp(*lens.split_observation(source.split_observation(raw)))
         a = np.asarray(source.join_actions(lens.join_actions((tca, tpa))), dtype=np.float64)
+        if clamp_oa is not None and oa_i.size:
+            a[oa_i] = np.maximum(a[oa_i], clamp_oa)
         raw, r, term, trunc, _ = env.step(a)
         ret += float(r); steps += 1
         if term or trunc:
@@ -88,6 +100,11 @@ def main():
                     help="dataset split to evaluate on (test or train)")
     ap.add_argument("--task", default=TASK,
                     help="b2b task preset (e.g. task_occ_emed for energy)")
+    ap.add_argument("--bridge", default="plain", choices=list(BRIDGES),
+                    help="spe for checkpoints trained with the spectral-PE bridge")
+    ap.add_argument("--clamp-oa-min", type=float, default=None,
+                    help="safety-layer projection: floor Outdoor Air Controller "
+                         "mass-flow commands at this value (kg/s)")
     ap.add_argument("--baselines", default=OUR_BASELINES,
                     help="JSON {building_id: baseline_return} to compare against "
                          "(default: our test default-RBC baseline)")
@@ -103,7 +120,8 @@ def main():
 
     # idx-major ordering => the first wave is one building of EACH type, so a
     # first cross-type read arrives early instead of after all of Retail.
-    tasks = [(ckpt, bt, idx, args.split, args.task) for idx in range(N) for bt in TYPES]
+    tasks = [(ckpt, bt, idx, args.split, args.task, args.bridge, args.clamp_oa_min)
+             for idx in range(N) for bt in TYPES]
     ids = {(bt, idx): reg.get_building_by_index(bt, args.split, idx).building_id
            for bt in TYPES for idx in range(N)}
 

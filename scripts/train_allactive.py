@@ -53,6 +53,10 @@ def main() -> None:
     p.add_argument("--init-checkpoint", default=None)
     p.add_argument("--conc-cap", type=float, default=None,
                    help="cap Beta concentration alpha+beta (exploration floor); None=off")
+    p.add_argument("--oa-floor", type=float, default=None,
+                   help="constrained domain: floor vav_supply oa_mass_flow at "
+                        "this value (kg/s) via the source-morphology typing "
+                        "(policy's [-1,1] maps onto [floor, high])")
     p.add_argument("--out", default="runs/officesmall_allactive")
     args = p.parse_args()
 
@@ -116,6 +120,7 @@ def main() -> None:
         checkpoint_path=ckpt,
         init_model=init_model,
         conc_cap=args.conc_cap,
+        oa_floor=args.oa_floor,
     )
     print(f"[done] checkpoint {ckpt}", flush=True)
     wandb.finish()

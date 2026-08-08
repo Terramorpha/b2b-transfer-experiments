@@ -16,6 +16,7 @@ identical too and the collection script asserts it).
 from __future__ import annotations
 
 import os
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,7 +25,10 @@ from pub_style import apply_pub_style, save, INK, W_E_COLORS, COLWIDTH_IN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-NPZ = os.path.join(REPO, "data", "supply_symmetry_rollout.npz")
+# optional argv: [npz_path] [output_stem]  (default: the plain-bridge rollout)
+NPZ = (sys.argv[1] if len(sys.argv) > 1
+       else os.path.join(REPO, "data", "supply_symmetry_rollout.npz"))
+STEM = sys.argv[2] if len(sys.argv) > 2 else "supply_symmetry_scatter"
 FIGDIR = os.path.join(REPO, "figures_out")
 
 def main() -> None:
@@ -71,10 +75,10 @@ def main() -> None:
     ax.legend(loc="upper left", frameon=False, fontsize=8)
 
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGDIR, "supply_symmetry_scatter_preview.png"),
+    fig.savefig(os.path.join(FIGDIR, f"{STEM}_preview.png"),
                 dpi=200, bbox_inches="tight", facecolor="white")
-    save(fig, os.path.join(FIGDIR, "supply_symmetry_scatter"))
-    print("wrote:", os.path.join(FIGDIR, "supply_symmetry_scatter.pdf"))
+    save(fig, os.path.join(FIGDIR, STEM))
+    print("wrote:", os.path.join(FIGDIR, f"{STEM}.pdf"))
     print("nodes:", *node_ids, sep="\n  ")
     print(f"max pairwise |SAT dev| = {max_dev:.3e} over {sat.shape[0]} steps "
           f"(bridge={d['bridge']}, ckpt={d['checkpoint']})")

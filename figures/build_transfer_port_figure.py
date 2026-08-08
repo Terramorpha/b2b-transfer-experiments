@@ -38,20 +38,29 @@ PANEL_W = TEXTWIDTH_IN / 4     # a 4-up figure at full text width
 VALUE_LABEL = "Normalized return"  # return / baseline on the same 672-step chunk
 
 
-def _series(sub, ours_label="Ours", ceiling_label=None):
+def _series(sub, ours_label="Ours", ceiling_label=None, *, ours_color=None,
+            ceiling_color=None, ceiling2_label=None, ceiling2_color=None):
     # Normalized return = return / baseline (b2b compute_normalized_score
     # convention). The baseline is a constant 1.0 -> shown only as the dashed
     # reference line, not a redundant flat bar; Ours is its ratio. Both on the
     # SAME chunk (baseline_chunk.csv).
+    # Error bars only when there is real seed spread: with a single seed the
+    # groupby std is NaN -> filled 0 -> capsize still paints misleading tick
+    # marks at every bar end. n=1 => no error channel at all.
+    errs = sub["ours_norm_err"].fillna(0.0).to_numpy()
+    if not (errs > 0).any():
+        errs = None
     s = [
-        (sub["ours_norm"].to_numpy(), sub["ours_norm_err"].fillna(0.0).to_numpy(),
-         OURS_COLOR, ours_label),
+        (sub["ours_norm"].to_numpy(), errs, ours_color or OURS_COLOR, ours_label),
     ]
-    # Optional upper-bound overlay (per-building specialist "oracle" ceiling).
-    # n=1 per building -> no error bars. Where the ceiling bar sits ABOVE Ours
-    # (e.g. Retail), single-building training overfit: the shared policy wins.
+    # Optional overlays: per-building {building_id: return} series (a specialist
+    # "oracle" ceiling, another model, a tuned RBC...). n=1 -> no error bars.
     if ceiling_label is not None and "ceil_norm" in sub:
-        s.append((sub["ceil_norm"].to_numpy(), None, CEIL_COLOR, ceiling_label))
+        s.append((sub["ceil_norm"].to_numpy(), None,
+                  ceiling_color or CEIL_COLOR, ceiling_label))
+    if ceiling2_label is not None and "ceil2_norm" in sub:
+        s.append((sub["ceil2_norm"].to_numpy(), None,
+                  ceiling2_color or REACTIVE_COLOR, ceiling2_label))
     return s
 
 
@@ -72,11 +81,20 @@ def main() -> None:
     # specialist "oracle"). When given, a second series is drawn + a legend.
     ap.add_argument("--ceiling-json", default=None)
     ap.add_argument("--ceiling-label", default="Specialist")
+    ap.add_argument("--ceiling2-json", default=None,
+                    help="optional third series, same {building_id: return} format")
+    ap.add_argument("--ceiling2-label", default="Tuned RBC")
+    ap.add_argument("--ours-color", default=None)
+    ap.add_argument("--ceiling-color", default=None)
+    ap.add_argument("--ceiling2-color", default=None)
     ap.add_argument("--reference-label", default="Baseline (G36)",
                     help="label for the normalized-return reference line (=1.0 baseline)")
     args = ap.parse_args()
     figdir, prefix = args.outdir, args.prefix
     clabel = args.ceiling_label if args.ceiling_json else None
+    c2label = args.ceiling2_label if args.ceiling2_json else None
+    skw = dict(ours_color=args.ours_color, ceiling_color=args.ceiling_color,
+               ceiling2_label=c2label, ceiling2_color=args.ceiling2_color)
 
     df = pd.read_csv(args.eval_csv)
     bdf = pd.read_csv(args.baseline_csv)
@@ -92,6 +110,9 @@ def main() -> None:
         missing = m[m["ceil_norm"].isna()]["building_id"].tolist()
         if missing:
             print(f"  (no ceiling value for {len(missing)} bldgs: {missing})")
+    if args.ceiling2_json:
+        cj2 = json.load(open(args.ceiling2_json))
+        m["ceil2_norm"] = m["building_id"].map(cj2) / m["baseline_return"]
 
     apply_pub_style()
     os.makedirs(figdir, exist_ok=True)
@@ -107,7 +128,7 @@ def main() -> None:
         fig, ax = barh_axes(width=PANEL_W, height=2.35)
         # No per-panel x-label: the four panels share one x quantity, so the
         # "Normalized return" label goes ONCE in LaTeX, centred under the row.
-        grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel),
+        grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel, **skw),
                      value_label=None, invert=False, reference=1.0,
                      reference_label=args.reference_label)
         if i == 0:
@@ -125,7 +146,7 @@ def main() -> None:
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
         ax.grid(axis="y", visible=False)
-        grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel),
+        grouped_barh(ax, _cats(sub), _series(sub, args.ours_label, clabel, **skw),
                      value_label=None, invert=False, reference=1.0,
                      reference_label=args.reference_label)
         ax.set_title(short)
