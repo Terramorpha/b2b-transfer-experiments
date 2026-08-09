@@ -58,14 +58,20 @@ OUR_BASELINES = os.path.join(REPO, "data", "rbc_fullyear_ourharness.json")
 def _worker(args):
     """Spawn-pool worker: one full-year rollout in its own process (EnergyPlus-safe).
     Top-level + picklable so it survives spawn."""
-    ckpt, bt, idx, split, task, bridge, clamp_oa = args
-    ret, steps = policy_return(ckpt, bt, idx, split, task, bridge, clamp_oa)
+    ckpt, bt, idx, split, task, bridge, clamp_oa, oa_floor = args
+    ret, steps = policy_return(ckpt, bt, idx, split, task, bridge, clamp_oa,
+                               oa_floor)
     return bt, idx, ret, steps
 
 
 def policy_return(ckpt, bt, idx, split="test", task=TASK, bridge="plain",
-                  clamp_oa=None):
+                  clamp_oa=None, oa_floor=None):
     env, source = _b2b_factory_impl(bt, idx, split, task, RP)
+    if oa_floor is not None:
+        # constrained-domain checkpoint: its [-1,1] OA output is typed against
+        # the FLOORED source (Range(floor, high)) — rebuild the source to match
+        from morel_b2b import b2b_morphology, normalize_b2b
+        source = normalize_b2b().apply(b2b_morphology(env, oa_floor=oa_floor))
     br, universe = BRIDGES[bridge]
     lens = br.apply(trivial_morphology(source))
     sp = amorpheus_policy(load_model(ckpt, d_model=64, n_heads=4, n_layers=3,
@@ -105,6 +111,9 @@ def main():
     ap.add_argument("--clamp-oa-min", type=float, default=None,
                     help="safety-layer projection: floor Outdoor Air Controller "
                          "mass-flow commands at this value (kg/s)")
+    ap.add_argument("--oa-floor", type=float, default=None,
+                    help="checkpoint was TRAINED on the OA-floored domain: "
+                         "decode actions against the floored source typing")
     ap.add_argument("--baselines", default=OUR_BASELINES,
                     help="JSON {building_id: baseline_return} to compare against "
                          "(default: our test default-RBC baseline)")
@@ -120,7 +129,8 @@ def main():
 
     # idx-major ordering => the first wave is one building of EACH type, so a
     # first cross-type read arrives early instead of after all of Retail.
-    tasks = [(ckpt, bt, idx, args.split, args.task, args.bridge, args.clamp_oa_min)
+    tasks = [(ckpt, bt, idx, args.split, args.task, args.bridge,
+              args.clamp_oa_min, args.oa_floor)
              for idx in range(N) for bt in TYPES]
     ids = {(bt, idx): reg.get_building_by_index(bt, args.split, idx).building_id
            for bt in TYPES for idx in range(N)}

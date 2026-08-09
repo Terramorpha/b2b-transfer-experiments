@@ -14,6 +14,73 @@ Mechanism companion: check_supply_symmetry --bridge spe on the trained ckpt + of
 scatter (figures_out/supply_symmetry_scatter_spe_*, data/supply_symmetry_rollout_spe.npz).
 Comfort ladder is now CLOSED: from-scratch → BC → DAgger y1 → y2 → +PPO → +SPE.
 
+### ORACLE-DISTILLATION FINAL VERDICT 2026-08-09 — PIPELINE COMPLETE, NO WIN
+Oracles 20/20 (per-building emed, warm-started, data/rbc_emed_oracle_configs).
+DISTILLED (y1+y2 floored, data/emed_oracle_dagger_fullyear_eval.csv) vs energy-
+tuned bar: 3/20 — **OfficeMedium 1.073 (1/5), OfficeSmall 1.095 (2/5)** = the
+BEST legitimate learned policy on the offices; Restaurant 1.60, Retail 2.14.
++PPO FINE-TUNE (1yr floored, data/emed_oracle_ppoft_fullyear_eval.csv): 1/20 —
+helped Restaurant (1.60→1.14) & Retail (2.14→1.72) but ERODED OfficeMedium
+(1.073→1.123) and wrecked OfficeSmall (1.095→1.71): the comfort-ladder
+"RL redistributes, doesn't lift" pattern, reproduced on energy.
+ENERGY CHAPTER FINAL LEDGER (all legitimate, vs energy-tuned lookup RBC):
+constrained scratch 0/20 (OffMed 1.53) | clamped scratch 0/20 (1.13) |
+distilled 3/20 (1.07) | distilled+PPO 1/20 (1.12). Tuned reactive control is
+unbeaten on correctly-constrained energy across FIVE independent attempts;
+closest approach = oracle distillation at ~7% on VAV. Exploit-free by
+construction (floored domain end-to-end). ALL EXPERIMENTS COMPLETE.
+
+### (superseded) RUNNING 2026-08-08 night: ORACLE-DISTILLATION PIPELINE (user: "last hope")
+Plan: per-building emed oracles → streaming DAgger distill → PPO fine-tune,
+ENTIRE pipeline on the FLOORED domain (--oa-floor 1.37; exploit structurally out;
+teacher OA=1.37 → label −1.0 exactly via A_pinv on floored typing — watch OA imit).
+1. RUNNING: scripts/tune_rbc_emed_oracles.py (20 train bldgs × 12 trials, Optuna
+   warm-started from the (type,CZ) energy configs via new --enqueue-json) →
+   data/rbc_emed_oracle_configs/<bt>_train_<idx>.json. ~13h, waiter bu0nmas0u,
+   log data/rbc_emed_oracles_campaign.log.
+2. ON WAKE: dagger_stream_amorpheus.py --task task_occ_emed
+   --config-dir data/rbc_emed_oracle_configs --oa-floor 1.37
+   --out runs/dagger_emed_oracle_y1 (y1 defaults) → then y2 continuation
+   (--init-checkpoint y1 ckpt --beta-half-life 1000 --out ..._y2). ~11h total.
+3. THEN: eval vs energy-tuned bar (eval_fullyear_panel --task task_occ_emed
+   --oa-floor 1.37), then PPO fine-tune yr (train_allactive --oa-floor 1.37
+   --init-checkpoint dagger ckpt, lr 2e-5 ent 0, 1yr) + eval. Lands ~Aug 10.
+Rationale: comfort ladder proved distill-beats-teacher (Jensen/pooling);
+teachers here are PER-BUILDING energy oracles > the per-(type,CZ) bar to beat;
+tuned-config transfer loss shown small. New flags: dagger --config-dir/--oa-floor.
+
+### CONSTRAINED-DOMAIN VERDICT 2026-08-08 — ENERGY CHAPTER CLOSED, 0/20
+data/emed_oafloor_fullyear_eval.csv (5.1y trained WITH the OA floor, decoded
+against floored source, --oa-floor eval flag). vs ENERGY-TUNED RBC: **0/20**.
+Per type (floored/tuned norm): Retail 2.04 | Restaurant 1.16 | OfficeMedium
+1.53 | OffSmall 1.19. KEY CONTROL: Restaurant/Retail/OffSmall returns are
+statistically identical to the unconstrained twin (−28.3k/−96.9k/−62.4k vs
+−28.3k/−95.3k/−60.0k) — protocol reproducibility confirmed; ONLY OfficeMedium
+collapsed (−63.6k vs −27.7k), exactly the type where the exploit lived.
+Triple attribution complete: (1) branched-rollout mechanism, (2) eval-time
+clamp (0/5), (3) constrained-domain retraining (0/5, worse than clamping).
+FINAL ENERGY STORY: with ventilation enforced, the energy-tuned RBC is
+unbeaten; the learning win was the exploit. vs default RBC the floored policy
+still wins 16/20 — but per user directive the tuned bar is the only bar.
+
+### (superseded) RUNNING 2026-08-08: CONSTRAINED-DOMAIN FROM-SCRATCH (user-ordered, the true last experiment)
+Question: can RL beat the energy-tuned RBC WITHOUT the ventilation exploit, given
+training under the constraint? (The eval-time clamp was a lower bound — 0/5.)
+Implementation: morel_b2b OA-floor MORPHISM (morel@9903a3c): vav_supply oa_mass_flow
+source-typed as Range(1.37, 5.0); normalize maps policy's [-1,1] onto it; normalized
+universe unchanged (same model/bridge). Smoke: joined OA ∈ [1.37, 5] exactly.
+Run: train_allactive --oa-floor 1.37, all 4 types × 5, emed, lr 5e-5 ent 0.01,
+10.752M steps = 5.1y (snapshots ≈2.56y midpoint), out runs/emed_fromscratch_oafloor,
+python PID 21186, waiter boqm1k40s (~14h). ON EXIT: eval_fullyear_panel on emed test
+(NO clamp flag needed — but note eval must use the SAME floored source: use
+--clamp-oa-min 1.37 as belt-and-braces; actions can't go below floor anyway if the
+policy was trained right... NO: eval harness uses unfloored source → policy outputs
+map to [0.005, 5]! MUST eval with a floored-source variant or --clamp-oa-min 1.37.
+Simplest correct: --clamp-oa-min 1.37 reproduces the training-time affine ONLY if
+combined with floored source. TODO on wake: add --oa-floor to eval_fullyear_panel
+(same b2b_morphology(oa_floor=) call) — 5-line edit — then eval OfficeMedium test
+vs energy-tuned bar. Chain: experiments@e338873 → morel@9903a3c (pins pushed).
+
 ### OA-CLAMP VERDICT 2026-08-07 night — THE ENERGY CHAPTER'S FINAL NUMBER
 Safety-layer eval (OA floored at 1.37 kg/s design intake, policy NOT retrained):
 data/emed_fromscratch_5y_oaclamp_fullyear_eval.csv, OfficeMedium test, full year.

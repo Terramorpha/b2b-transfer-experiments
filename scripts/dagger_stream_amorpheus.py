@@ -64,7 +64,8 @@ from evaluate import _b2b_factory_impl
 
 TASK, RP = "task_occ_e0", "full_year"
 YEAR_STEPS = 105_120
-CFG_DIR = os.path.join(REPO, "data", "rbc_tuned_configs")
+CFG_DIR = os.path.join(REPO, "data", "rbc_tuned_configs")  # --config-dir overrides
+OA_FLOOR = None  # --oa-floor overrides (constrained-domain source typing)
 
 
 def _controller(bt, idx):
@@ -164,6 +165,13 @@ class Slot:
     def __init__(self, bt, idx, task, model, cap, bridge=AMORPHEUS_B2B_BRIDGE):
         self.bt, self.idx, self.label = bt, idx, f"{bt}_{idx}"
         self.env, self.source = _b2b_factory_impl(bt, idx, "train", task, RP)
+        if OA_FLOOR is not None:
+            # constrained domain: retype the source so the policy's [-1,1] OA
+            # maps onto [floor, high]; teacher labels project through A_pinv
+            # into the same floored normalized space (teacher OA=design -> -1).
+            from morel_b2b import b2b_morphology, normalize_b2b
+            self.source = normalize_b2b().apply(
+                b2b_morphology(self.env, oa_floor=OA_FLOOR))
         self.m = bridge.apply(self.source)
         self.lens = bridge.apply(trivial_morphology(self.source))
         cond = model.condition(self.m)
@@ -236,6 +244,12 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--init-checkpoint", default=None)
     ap.add_argument("--out", default="runs/dagger_stream_e0_amorpheus")
+    ap.add_argument("--config-dir", default=None,
+                    help="teacher config dir (default data/rbc_tuned_configs; "
+                         "use data/rbc_emed_oracle_configs for energy oracles)")
+    ap.add_argument("--oa-floor", type=float, default=None,
+                    help="constrained domain: floor vav_supply oa_mass_flow "
+                         "in the source typing (kg/s)")
     ap.add_argument("--bridge", default="plain", choices=["plain", "spe"],
                     help="spe = compose spectral_pe in front of the Amorpheus "
                          "bridge (breaks the vav_supply symmetry; the one-"
@@ -252,6 +266,11 @@ def main():
     ap.add_argument("--snapshot-every", type=int, default=50,
                     help="also keep a numbered snapshot every N cycles")
     args = ap.parse_args()
+    global CFG_DIR, OA_FLOOR
+    if args.config_dir is not None:
+        CFG_DIR = (args.config_dir if os.path.isabs(args.config_dir)
+                   else os.path.join(REPO, args.config_dir))
+    OA_FLOOR = args.oa_floor
 
     out_dir = args.out if os.path.isabs(args.out) else os.path.join(REPO, args.out)
     os.makedirs(out_dir, exist_ok=True)

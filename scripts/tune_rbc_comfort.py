@@ -111,6 +111,10 @@ def main():
     ap.add_argument("--out-dir", default=CONFIG_DIR,
                     help="where the winning config json goes "
                          "(use a separate dir per objective!)")
+    ap.add_argument("--enqueue-json", default=None,
+                    help="warm start: enqueue this config json's params as "
+                         "trial 0 (e.g. the building's per-(type,CZ) tuned "
+                         "config), so few trials suffice")
     args = ap.parse_args()
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -131,7 +135,11 @@ def main():
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(n_startup_trials=8, seed=42))
+        sampler=optuna.samplers.TPESampler(n_startup_trials=4, seed=42))
+    if args.enqueue_json is not None:
+        warm = json.load(open(args.enqueue_json))["params"]
+        study.enqueue_trial(warm)
+        print(f"[tune] warm-start enqueued from {args.enqueue_json}", flush=True)
     study.optimize(objective, n_trials=args.n_trials)
 
     os.makedirs(out_dir, exist_ok=True)
