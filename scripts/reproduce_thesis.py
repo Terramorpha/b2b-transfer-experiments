@@ -40,7 +40,7 @@ TYPES4 = ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall
 EVAL_ENV = {"OMP_NUM_THREADS": "1",
             "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}
 
-POOL_CAP = {"train": 3, "eval": 1, "rbc": 24, "diag": 2, "light": 4}
+POOL_CAP = {"train": 3, "eval": 1, "rbc": 16, "diag": 2, "light": 4}
 
 
 @dataclass
@@ -258,6 +258,9 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", nargs="*", default=None, help="task name prefixes to run (deps implied)")
     ap.add_argument("--poll", type=float, default=5.0)
+    ap.add_argument("--fresh", action="store_true",
+                    help="delete every task's outputs first (a checkout carries the banked "
+                         "results as tracked files; a reproduction must regenerate them)")
     args = ap.parse_args()
 
     tasks = {t.name: t for t in build_tasks()}
@@ -274,6 +277,16 @@ def main() -> None:
 
     os.makedirs(os.path.join(REPO, "logs"), exist_ok=True)
     master = open(os.path.join(REPO, "logs", "reproduce_thesis.log"), "a")
+    if args.fresh and not args.dry_run:
+        import shutil
+        for t in tasks.values():
+            for o in t.outputs:
+                p = os.path.join(REPO, o)
+                if os.path.isdir(p):
+                    shutil.rmtree(p)
+                elif os.path.isfile(p):
+                    os.remove(p)
+        master.write(f"[{time.strftime('%F %T')}] FRESH: removed outputs of {len(tasks)} tasks\n")
 
     def log(msg: str) -> None:
         line = f"[{time.strftime('%F %T')}] {msg}"
