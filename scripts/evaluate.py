@@ -42,14 +42,18 @@ from building2building.data.registry import get_registry
 from building2building.scoring import compute_normalized_score
 
 from morel.evaluation import Run, run_evaluation
-from morel_b2b import ScalarOnlyInfo
-from one_policy_to_run_them_all.morel import (
-    FOOT_NODE_TYPE,
-    JOINT_NODE_TYPE,
-    count_nodes,
-)
-from run_training import RBC_TRACE_DIR, b2b_source_morphology, urma_bridge
-from workbench import UrmaPolicyEvaluator, make_policy_and_params
+from morel_b2b import ScalarOnlyInfo, b2b_morphology, normalize_b2b
+
+# URMA-specific deps (one_policy_to_run_them_all, run_training, workbench)
+# are imported LAZILY inside the _urma_* helpers below: every b2b consumer
+# of this module only needs _b2b_factory_impl, which is pure morel_b2b.
+RBC_TRACE_DIR = "rbc_traces"
+
+
+def b2b_source_morphology(env):
+    """Env-side half of the lens: b2b ndarray <-> normalized b2b values
+    (inlined from run_training to avoid importing the URMA stack)."""
+    return normalize_b2b().apply(b2b_morphology(env))
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +82,7 @@ def _urma_step_for_morph(target, *, policy_module, params):
     """Constructed inside the worker once `_urma_policy_factory_impl`
     has loaded the orbax checkpoint. Bound via `partial` so the worker
     can call `policy(target)` to get a step-callable for that morphology."""
+    from workbench import UrmaPolicyEvaluator
     return UrmaPolicyEvaluator(
         target, policy_module, params, deterministic=True,
     )
@@ -86,6 +91,7 @@ def _urma_step_for_morph(target, *, policy_module, params):
 def _urma_policy_factory_impl(ckpt_path: str, n_joints: int, n_feet: int):
     """Loads orbax inside the worker (called once per task in the
     pool); returns a `Policy: Morphology → StepFn` partial."""
+    from workbench import make_policy_and_params
     policy_module, params = make_policy_and_params(
         n_joints, n_feet, ckpt_path,
     )
@@ -103,6 +109,9 @@ def _ref_node_counts(building_type: str, split: str, task: str, identity_one_hot
     )
     env = ScalarOnlyInfo(raw)
     source = b2b_source_morphology(env)
+    from one_policy_to_run_them_all.morel import (
+        FOOT_NODE_TYPE, JOINT_NODE_TYPE, count_nodes)
+    from run_training import urma_bridge
     target = urma_bridge(identity_one_hot=identity_one_hot).apply(source)
     n_joints = count_nodes(target, JOINT_NODE_TYPE)
     n_feet = count_nodes(target, FOOT_NODE_TYPE)
@@ -217,6 +226,7 @@ def main() -> None:
         help="must match the loaded checkpoint's training config",
     )
     args = parser.parse_args()
+    from run_training import urma_bridge
     max_steps = args.steps if args.steps > 0 else None
 
     ckpt = os.path.abspath(args.load)
