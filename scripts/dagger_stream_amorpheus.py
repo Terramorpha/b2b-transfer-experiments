@@ -28,6 +28,14 @@ Teachers are PER ENV and persist alongside their env (their .predict MUTATES
 state, so one shared instance would corrupt every building's integrators).
 
     python scripts/dagger_stream_amorpheus.py --n-envs 5 --total-steps 2000000
+
+Rollout machinery (2026-09): the loop is TIMESTEP-major on
+`morel_amorpheus.rollout` — every env has its own master thread
+(`AsyncEnv`), the lens is compiled, and each schema group's student
+forward runs as ONE fused kernel per timestep (lens split -> forward ->
+lens join). The teacher and the beta-mixture draw stay in Python. Note
+the Bernoulli draws are now consumed in timestep-major order (previously
+slot-major), so runs are not bit-identical to pre-port ones.
 """
 from __future__ import annotations
 
@@ -54,9 +62,9 @@ import wandb
 import json
 from baselines.controllers import (
     AirLoopPolicy, UnitaryHvacPolicy, AirLoopConfig, UnitaryHvacConfig)
-from morel import Unit
-from morel.morphology import trivial_morphology
-from morel_amorpheus.policy import decode_flat_action, encode_local_obs
+from morel_amorpheus.model import forward as amorpheus_forward
+from morel_amorpheus.rollout import (
+    act_groups, make_group_actors, make_slot, split_keys, split_obs_rows)
 from morel_b2b_amorpheus import (
     AMORPHEUS_B2B_BRIDGE, AMORPHEUS_B2B_SPE_BRIDGE, AMORPHEUS_B2B_SPE_UNIVERSE,
     make_model, load_model, save_model)
@@ -85,21 +93,20 @@ class Buffer:
     labels + rewards. Contiguous in time (FIFO evicts the oldest), so discounted
     returns-to-go can be computed over the window."""
 
-    def __init__(self, n_nodes: int, cap: int):
+    def __init__(self, obs_widths: tuple[int, ...], cap: int):
         self.cap = cap
-        self.obs = [[] for _ in range(n_nodes)]
+        self.obs_widths = tuple(obs_widths)
+        self.obs: list[np.ndarray] = []      # encoded obs ROWS (sum(obs_widths),)
         self.ftar: list[np.ndarray] = []
         self.rew: list[float] = []
 
-    def push(self, obs_nodes, ftar, rew):
-        for i, o in enumerate(obs_nodes):
-            self.obs[i].append(o)
+    def push(self, obs_row, ftar, rew):
+        self.obs.append(obs_row)
         self.ftar.append(ftar)
         self.rew.append(rew)
         if len(self.ftar) > self.cap:
             k = len(self.ftar) - self.cap
-            for i in range(len(self.obs)):
-                del self.obs[i][:k]
+            del self.obs[:k]
             del self.ftar[:k]
             del self.rew[:k]
 
@@ -107,7 +114,7 @@ class Buffer:
         return len(self.ftar)
 
     def arrays(self):
-        obs = tuple(jnp.asarray(np.stack(o)) for o in self.obs)
+        obs = split_obs_rows(np.stack(self.obs), self.obs_widths)
         return obs, jnp.asarray(np.stack(self.ftar))
 
     def returns_to_go(self, gamma, bootstrap=0.0):
@@ -122,15 +129,15 @@ class Buffer:
         return G.astype(np.float32)
 
 
-def make_act_fn(m):
-    """Jitted (policy mean, value) for ONE morphology. `m` is closed over
-    (static); `model` is an ARGUMENT, so parameter updates need no recompile."""
-    @eqx.filter_jit
-    def act(model, local_obs):
-        cond = model.condition(m)
-        d, v = cond(local_obs)
+def _student_sample_for(schema):
+    """`per_sample` for `rollout.make_group_actors`: the student's
+    deterministic (Beta-mean) action and value. `key` is unused."""
+    type_names, act_widths = schema[0], schema[2]
+
+    def per_sample(model, low, high, node_attrs, obs, key):
+        d, v = amorpheus_forward(model, type_names, act_widths, low, high, obs)
         return d.mean, v
-    return act
+    return per_sample
 
 
 def make_policy_grad(m):
@@ -158,62 +165,55 @@ BRIDGES = {"plain": (AMORPHEUS_B2B_BRIDGE, None),
 
 
 class Slot:
-    """One PERSISTENT env + its morphology, action-inversion probe, its OWN RBC
-    teacher, and its replay buffer. Mirrors ppo._Slot but keeps the RAW obs (the
-    RBC consumes raw observations) and the teacher."""
+    """One PERSISTENT env (a `rollout.Slot`: async env, compiled lens, schema)
+    + its action-inversion probe, its OWN RBC teacher, and its replay buffer.
+    The RBC consumes the RAW observation (`self.raw`)."""
 
     def __init__(self, bt, idx, task, model, cap, bridge=AMORPHEUS_B2B_BRIDGE):
         self.bt, self.idx, self.label = bt, idx, f"{bt}_{idx}"
-        self.env, self.source = _b2b_factory_impl(bt, idx, "train", task, RP)
+        env, source = _b2b_factory_impl(bt, idx, "train", task, RP)
         if OA_FLOOR is not None:
             # constrained domain: retype the source so the policy's [-1,1] OA
             # maps onto [floor, high]; teacher labels project through A_pinv
             # into the same floored normalized space (teacher OA=design -> -1).
             from morel_b2b import b2b_morphology, normalize_b2b
-            self.source = normalize_b2b().apply(
-                b2b_morphology(self.env, oa_floor=OA_FLOOR))
-        self.m = bridge.apply(self.source)
-        self.lens = bridge.apply(trivial_morphology(self.source))
-        cond = model.condition(self.m)
-        self.nids, self.aws = cond.node_ids, cond.act_widths
+            source = normalize_b2b().apply(b2b_morphology(env, oa_floor=OA_FLOOR))
+        self.rs = make_slot(env, source, bridge, model)   # wraps env in AsyncEnv
+        self.env = self.rs.env
+        self.m = self.rs.target
+        self.nids, self.aws = self.rs.node_ids, self.rs.act_widths
         D = int(sum(self.aws))
 
         # Affine target->physical action probe, pseudo-inverted (identical to
         # dagger_collect_amorpheus): labels live in the policy's normalized space.
         def join_flat(f):
-            dd = decode_flat_action(self.m, self.nids, self.aws,
-                                    np.asarray(f, np.float32))
-            return np.asarray(
-                self.source.join_actions(self.lens.join_actions((Unit, dd))),
-                dtype=np.float64)
+            return np.asarray(self.rs.join_fn(np.asarray(f, np.float32)), dtype=np.float64)
         self.join_flat = join_flat
         self.c = join_flat(np.zeros(D))
         self.A = np.stack([join_flat(np.eye(D)[j]) - self.c for j in range(D)], axis=1)
         self.A_pinv = np.linalg.pinv(self.A)
 
         self.rbc = _controller(bt, idx)      # PERSISTENT teacher for this env
-        self.rbc.bind_env(self.env)
-        self.raw = None
-        self.buf = Buffer(len(self.nids), cap)
+        self.rbc.bind_env(env)               # the raw env (RBC reads its state)
+        self.buf = Buffer(self.rs.obs_widths, cap)
         self.ep_return = 0.0
         self.cycle_rewards: list[float] = []
         self.cycle_imit: list[float] = []
         self.last_ep_return = float("nan")
 
+    @property
+    def raw(self):
+        return self.rs.raw_obs
+
     def ensure_reset(self):
-        if self.raw is None:
-            self.raw, _ = self.env.reset()
+        if self.rs.raw_obs is None:
+            self.rs.ensure_reset()
             self.rbc.reset()
             self.ep_return = 0.0
 
-    def local_obs(self):
-        _c, per_node = self.lens.split_observation(
-            self.source.split_observation(self.raw))
-        return encode_local_obs(self.m, self.nids, per_node)
-
     def close(self):
         try:
-            self.env.close()
+            self.rs.env.close()
         except Exception:
             pass
 
@@ -315,7 +315,10 @@ def main():
                 cache[k] = make(m)
             return cache[k]
         return get
-    _act, _pg, _vg = _memo(make_act_fn), _memo(make_policy_grad), _memo(make_value_grad)
+    _pg, _vg = _memo(make_policy_grad), _memo(make_value_grad)
+    rslots = [s.rs for s in slots]
+    actors = make_group_actors(rslots, _student_sample_for)   # fused student kernels
+    key = jax.random.PRNGKey(args.seed)
 
     opt = optax.adam(args.lr)
     opt_state = opt.init(eqx.filter(model, eqx.is_array))
@@ -336,53 +339,58 @@ def main():
         for s in slots:
             s.cycle_rewards.clear(); s.cycle_imit.clear()
 
-        # ---------------- streaming rollout (persistent envs, round-robin) -----
+        # ---------------- streaming rollout (persistent envs, timestep-major) --
         n_expert = 0
         for s in slots:
             s.ensure_reset()
-            act = _act(s.m)
-            for _t in range(args.n_steps):
-                obs_np = [np.asarray(o, np.float32) for o in s.local_obs()]
-                f_student, _v = act(model, tuple(jnp.asarray(o) for o in obs_np))
-                f_student = np.asarray(f_student, dtype=np.float64)
+        for _t in range(args.n_steps):
+            key, subs = split_keys(key, len(slots))
+            futs: list = [None] * len(slots)
+            # Phase 1: one fused kernel per schema group -> student mean action
+            # (normalized) + the RAW student action; teacher + mixture in Python.
+            for res in act_groups(rslots, actors, model, subs):
+                means, _vals = res.outs
+                for j, i in enumerate(res.idxs):
+                    s = slots[i]
+                    f_student = np.asarray(means[j], dtype=np.float64)
+                    raw_student = np.asarray(res.raw_actions[j], dtype=np.float32)
+                    obs_row = res.obs_rows[j]
 
-                if args.critic_only:
-                    # pure policy evaluation: student always drives, no teacher,
-                    # labels unused (zeros) -- only (obs, reward) matter for V.
-                    a_exec = s.join_flat(f_student)
-                    s.buf.push(obs_np, np.zeros_like(f_student, dtype=np.float32), 0.0)
-                else:
-                    # ALWAYS query the teacher: advances shadow state AND is the label
-                    a_rbc, _ = s.rbc.predict(s.raw)
-                    a_rbc = np.asarray(a_rbc, dtype=np.float64)
-                    f_rbc = np.clip((a_rbc - s.c) @ s.A_pinv.T, -1.0, 1.0)
-
-                    # true DAgger gap on the CURRENTLY VISITED state
-                    s.cycle_imit.append(float(np.mean((f_student - f_rbc) ** 2)))
-
-                    # per-step Bernoulli(beta) execution mixture
-                    use_expert = rng.random() < beta
-                    if use_expert:
-                        a_exec = a_rbc; n_expert += 1
+                    if args.critic_only:
+                        # pure policy evaluation: student always drives, no teacher,
+                        # labels unused (zeros) -- only (obs, reward) matter for V.
+                        a_exec = raw_student
+                        s.buf.push(obs_row, np.zeros_like(f_student, dtype=np.float32), 0.0)
                     else:
-                        a_exec = s.join_flat(f_student)
+                        # ALWAYS query the teacher: advances shadow state AND is the label
+                        a_rbc, _ = s.rbc.predict(s.raw)
+                        a_rbc = np.asarray(a_rbc, dtype=np.float64)
+                        f_rbc = np.clip((a_rbc - s.c) @ s.A_pinv.T, -1.0, 1.0)
 
-                    # push BEFORE stepping (obs/label are for the current state)
-                    s.buf.push(obs_np, f_rbc.astype(np.float32), 0.0)
+                        # true DAgger gap on the CURRENTLY VISITED state
+                        s.cycle_imit.append(float(np.mean((f_student - f_rbc) ** 2)))
 
-                raw, r, term, trunc, _ = s.env.step(
-                    np.asarray(a_exec, dtype=np.float32))
-                r = float(r)
+                        # per-step Bernoulli(beta) execution mixture
+                        use_expert = rng.random() < beta
+                        if use_expert:
+                            a_exec = a_rbc; n_expert += 1
+                        else:
+                            a_exec = raw_student
+
+                        # push BEFORE stepping (obs/label are for the current state)
+                        s.buf.push(obs_row, f_rbc.astype(np.float32), 0.0)
+
+                    futs[i] = s.rs.step_async_raw(np.asarray(a_exec, dtype=np.float32))
+            # Phase 2: collect in order.
+            for i, s in enumerate(slots):
+                r, done, _info = s.rs.step_wait(futs[i])
                 s.buf.rew[-1] = r          # reward for the transition just taken
                 s.cycle_rewards.append(r)
                 s.ep_return += r
                 global_step += 1
-                if term or trunc:
+                if done:
                     s.last_ep_return = s.ep_return
-                    s.raw = None
                     s.ensure_reset()       # persistent env: auto-reset, keep going
-                else:
-                    s.raw = raw
 
         # ---------------- SGD cycle: sample the WHOLE buffer -------------------
         # rotate buildings across SGD steps (per-building minibatches keep jit

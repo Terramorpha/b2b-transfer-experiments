@@ -31,10 +31,9 @@ import numpy as np
 import pandas as pd
 
 from building2building.data.registry import get_registry
-from morel_amorpheus import amorpheus_policy
+from morel_amorpheus.policy import compile_raw_step
 from morel_b2b_amorpheus import (AMORPHEUS_B2B_BRIDGE, AMORPHEUS_B2B_SPE_BRIDGE,
                                  AMORPHEUS_B2B_SPE_UNIVERSE, load_model)
-from morel.morphology import trivial_morphology
 from evaluate import _b2b_factory_impl
 
 # bridge name -> (bridge, universe-for-load_model); mirrors dagger_stream
@@ -73,17 +72,19 @@ def policy_return(ckpt, bt, idx, split="test", task=TASK, bridge="plain",
         from morel_b2b import b2b_morphology, normalize_b2b
         source = normalize_b2b().apply(b2b_morphology(env, oa_floor=oa_floor))
     br, universe = BRIDGES[bridge]
-    lens = br.apply(trivial_morphology(source))
-    sp = amorpheus_policy(load_model(ckpt, d_model=64, n_heads=4, n_layers=3,
-                                     universe=universe))(br.apply(source))
+    target = br.apply(source)
+    policy = load_model(ckpt, d_model=64, n_heads=4, n_layers=3,
+                        universe=universe).condition(target)
+    # One jitted kernel per building: lens split -> forward -> lens join
+    # (deterministic: Beta mean). Replaces the per-step Value round trip.
+    step = compile_raw_step(policy, target, deterministic=True)
     an = [str(n).lower() for n in env.metadata["action_names"]]
     oa_i = np.array([i for i, n in enumerate(an)
                      if "outdoor air controller" in n and "mass flow" in n])
     raw, _ = env.reset()
     ret, steps = 0.0, 0
     for _t in range(MAX_STEPS):
-        tca, tpa = sp(*lens.split_observation(source.split_observation(raw)))
-        a = np.asarray(source.join_actions(lens.join_actions((tca, tpa))), dtype=np.float64)
+        a = np.asarray(step(raw), dtype=np.float64)
         if clamp_oa is not None and oa_i.size:
             a[oa_i] = np.maximum(a[oa_i], clamp_oa)
         raw, r, term, trunc, _ = env.step(a)
