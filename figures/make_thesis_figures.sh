@@ -25,7 +25,7 @@
 #   generated/*.svg in the org file -> org-babel dot block (C-c C-c in Emacs).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PY=vendor/morel/.venv/bin/python
+PY=${PY:-vendor/morel/.venv/bin/python}   # override: PY=.venv/bin/python bash figures/make_thesis_figures.sh
 export MPLBACKEND=Agg PYTHONPATH=figures
 
 echo "== derived inputs (data/_*.csv|json) from primary sources =="

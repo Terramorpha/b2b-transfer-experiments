@@ -32,7 +32,7 @@ from building2building.data.registry import get_registry
 TYPES = ["RetailStandalone", "RestaurantFastFood", "OfficeMedium", "OfficeSmall"]
 N_TEST = 5
 OUT_DIR = os.path.join(REPO, "data", "rbc_emed_tuned_pertypecz")
-PY = os.path.join(REPO, "vendor", "morel", ".venv", "bin", "python")
+PY = sys.executable   # run the tuner with the interpreter running this campaign
 
 
 def _cz(bt, bid):
