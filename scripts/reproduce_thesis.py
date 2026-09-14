@@ -67,7 +67,12 @@ def _eval(ckpt, tag, *extra):
     return _py("eval_fullyear_panel.py", "--checkpoint", ckpt, "--tag", tag, "--n-workers", 20, *extra)
 
 
-def build_tasks() -> list[Task]:
+def build_tasks(seeds: list[int] | None = None) -> list[Task]:
+    """The base campaign (seed 0, as in the thesis) plus, for each extra seed in
+    `seeds`, a seed-suffixed copy of every LEARNED chain (BC fit + warm-start,
+    from-scratch runs, DAgger/SPE/critic/fine-tune) with its evals. RBC
+    baselines, tuning campaigns, demo collection, diagnostics and figures are
+    shared (seed-independent or single-seed by design)."""
     T: list[Task] = []
     add = T.append
 
@@ -103,118 +108,123 @@ def build_tasks() -> list[Task]:
              _py("tune_rbc_emed_campaign.py", "--n-workers", 11),
              ["data/rbc_emed_tuned_pertypecz"], pool="rbc", weight=11,
              note="energy-tuned per-(type,CZ) RBC, 11 pairs x 25 trials"))
-
-    # ---- BC seed ----------------------------------------------------------
     add(Task("B1a_bc_collect", _py("bc_collect.py", "--n-workers", 20),
              ["data/bc_demos"], pool="eval"))
-    add(Task("B1b_bc_fit",
-             _py("bc_fit.py", "--policy-steps", 20000, "--out", "runs/transfer4_bc_long/model_s0.eqx"),
-             ["runs/transfer4_bc_long/model_s0.eqx"], deps=["B1a_bc_collect"], pool="light",
-             note="thesis: 20k Adam steps, lr 3e-4 (fit budget of the original _long run not logged)"))
 
-    # ---- Training runs (wandb-verified commands) ---------------------------
-    add(Task("T1_transfer4_persistent_long",
-             _train("train_allactive.py", "--task", "task_occ_e0", "--total-steps", 5376000,
-                    "--n-steps", 672, "--lr", "5e-5", "--ent-coef", 0.01, "--gamma", 0.98,
-                    "--seed", 0, "--out", "runs/transfer4_persistent_long"),
-             ["runs/transfer4_persistent_long/model_s0.eqx"], pool="train",
-             note="from-scratch comfort (400 updates at the era's n_steps=672)"))
-    add(Task("T2_transfer4_bcwarm",
-             _train("train_allactive.py", "--task", "task_occ_e0", "--years", 1, "--lr", "2e-5",
-                    "--ent-coef", 0.0, "--gamma", 0.99, "--seed", 0,
-                    "--init-checkpoint", "runs/transfer4_bc_long/model_s0.eqx",
-                    "--out", "runs/transfer4_bcwarm"),
-             ["runs/transfer4_bcwarm/model_s0.eqx"], deps=["B1b_bc_fit"], pool="train"))
-    add(Task("T3_dagger_y1",
-             _train("dagger_stream_amorpheus.py", "--task", "task_occ_e0", "--total-steps", 2000000,
-                    "--n-steps", 512, "--updates-per-cycle", 32, "--minibatch", 256,
-                    "--buffer-cap", 100000, "--beta-half-life", 200000,
-                    "--checkpoint-every", 10, "--snapshot-every", 50,
-                    "--out", "runs/dagger_stream_e0_amorpheus"),
-             ["runs/dagger_stream_e0_amorpheus/model_s0.eqx"],
-             deps=["R2_join_tuned_train_baseline"], pool="train"))
-    add(Task("T4_dagger_y2",
-             _train("dagger_stream_amorpheus.py", "--task", "task_occ_e0", "--total-steps", 2000000,
-                    "--n-steps", 512, "--updates-per-cycle", 64, "--minibatch", 256,
-                    "--buffer-cap", 500000, "--beta-half-life", 1000,
-                    "--init-checkpoint", "runs/dagger_stream_e0_amorpheus/model_s0.eqx",
-                    "--checkpoint-every", 10, "--snapshot-every", 50,
-                    "--out", "runs/dagger_stream_e0_amorpheus_y2"),
-             ["runs/dagger_stream_e0_amorpheus_y2/model_s0.eqx"], deps=["T3_dagger_y1"], pool="train"))
-    add(Task("T5_dagger_ppoft",
-             _train("train_allactive.py", "--task", "task_occ_e0", "--years", 1, "--ent-coef", 0,
-                    "--lr", "2e-5", "--seed", 0,
-                    "--init-checkpoint", "runs/dagger_stream_e0_amorpheus_y2/model_s0.eqx",
-                    "--out", "runs/dagger_stream_e0_ppoft"),
-             ["runs/dagger_stream_e0_ppoft/model_s0.eqx"], deps=["T4_dagger_y2"], pool="train"))
-    add(Task("T6_spe_y1",
-             _py("dagger_stream_amorpheus.py", "--bridge", "spe", "--out", "runs/dagger_stream_spe_amorpheus"),
-             ["runs/dagger_stream_spe_amorpheus/model_s0.eqx"],
-             deps=["R2_join_tuned_train_baseline"], pool="train",
-             note="all other flags at defaults = y1 protocol"))
-    add(Task("T7_spe_y2",
-             _py("dagger_stream_amorpheus.py", "--bridge", "spe",
-                 "--init-checkpoint", "runs/dagger_stream_spe_amorpheus/model_s0.eqx",
-                 "--beta-half-life", 1000, "--out", "runs/dagger_stream_spe_amorpheus_y2"),
-             ["runs/dagger_stream_spe_amorpheus_y2/model_s0.eqx"], deps=["T6_spe_y1"], pool="train",
-             note="kept defaults updates-per-cycle 32 / buffer 100k (as the original run did)"))
-    add(Task("T8_critic_year_emed",
-             _train("dagger_stream_amorpheus.py", "--critic-only", "--task", "task_occ_emed",
-                    "--total-steps", 2000000, "--n-steps", 512, "--updates-per-cycle", 64,
-                    "--minibatch", 256, "--buffer-cap", 500000, "--beta-half-life", 1000,
-                    "--init-checkpoint", "runs/dagger_stream_e0_amorpheus_y2/model_s0.eqx",
-                    "--checkpoint-every", 10, "--snapshot-every", 50,
-                    "--out", "runs/dagger_stream_emed_criticyear"),
-             ["runs/dagger_stream_emed_criticyear/model_s0.eqx"], deps=["T4_dagger_y2"], pool="train"))
-    add(Task("T9_emed_ppoft",
-             _train("train_allactive.py", "--task", "task_occ_emed", "--years", 1, "--ent-coef", 0,
-                    "--lr", "2e-5", "--seed", 0,
-                    "--init-checkpoint", "runs/dagger_stream_emed_criticyear/model_s0.eqx",
-                    "--out", "runs/dagger_emed_ppoft"),
-             ["runs/dagger_emed_ppoft/model_s0.eqx"], deps=["T8_critic_year_emed"], pool="train"))
-    add(Task("T10_emed_fromscratch",
-             _train("train_allactive.py", "--task", "task_occ_emed", "--total-steps", 5376000,
-                    "--lr", "5e-5", "--ent-coef", 0.01, "--seed", 0,
-                    "--out", "runs/emed_fromscratch_amorpheus"),
-             ["runs/emed_fromscratch_amorpheus/model_s0.eqx"], pool="train"))
-    add(Task("T11_emed_fromscratch_y2",
-             _train("train_allactive.py", "--task", "task_occ_emed", "--lr", "5e-05",
-                    "--ent-coef", 0.01, "--total-steps", 5376000,
-                    "--init-checkpoint", "runs/emed_fromscratch_amorpheus/model_s0.eqx",
-                    "--out", "runs/emed_fromscratch_amorpheus_y2"),
-             ["runs/emed_fromscratch_amorpheus_y2/model_s0.eqx"],
-             deps=["T10_emed_fromscratch"], pool="train"))
+    # ---- Learned chains, one copy per seed ---------------------------------
+    for seed in [0] + list(seeds or []):
+        suf = "" if seed == 0 else f"_seed{seed}"       # task names, out dirs, eval tags
+        S = str(seed)
+        out = lambda d: f"runs/{d}{suf}"                 # noqa: E731
+        ckpt = lambda d: f"{out(d)}/model_s{S}.eqx"      # noqa: E731
 
-    # ---- Full-year evals (20 test buildings, 20 workers) ---------------------
-    emed = ["--task", "task_occ_emed", "--baselines", "data/rbc_emed_fullyear.json"]
-    evals = [
-        ("E1_transfer4_final", "runs/transfer4_persistent_long/model_s0.eqx", "transfer4_final", [], ["T1_transfer4_persistent_long", "R0_rbc_default_e0"]),
-        ("E2_transfer4_bcwarm", "runs/transfer4_bcwarm/model_s0.eqx", "transfer4_bcwarm", [], ["T2_transfer4_bcwarm", "R0_rbc_default_e0"]),
-        ("E3_bcwarm_train", "runs/transfer4_bcwarm/model_s0.eqx", "bcwarm_train",
-         ["--split", "train", "--baselines", "data/tuned_train_baseline.json"],
-         ["T2_transfer4_bcwarm", "R2_join_tuned_train_baseline"]),
-        ("E4_dagger_y1_test", "runs/dagger_stream_e0_amorpheus/model_s0.eqx", "dagger_stream_y1_test", [], ["T3_dagger_y1", "R0_rbc_default_e0"]),
-        ("E5_dagger_y2_test", "runs/dagger_stream_e0_amorpheus_y2/model_s0.eqx", "dagger_stream_y2_test", [], ["T4_dagger_y2", "R0_rbc_default_e0"]),
-        ("E6_dagger_ppoft_test", "runs/dagger_stream_e0_ppoft/model_s0.eqx", "dagger_ppoft_test", [], ["T5_dagger_ppoft", "R0_rbc_default_e0"]),
-        ("E7_spe_y2_test", "runs/dagger_stream_spe_amorpheus_y2/model_s0.eqx", "spe_y2_test", ["--bridge", "spe"], ["T7_spe_y2", "R0_rbc_default_e0"]),
-        ("E8_emed_ppoft_test", "runs/dagger_emed_ppoft/model_s0.eqx", "emed_ppoft_test", emed, ["T9_emed_ppoft", "R3_rbc_default_emed"]),
-        ("E9_emed_fromscratch_test", "runs/emed_fromscratch_amorpheus/model_s0.eqx", "emed_fromscratch_test", emed, ["T10_emed_fromscratch", "R3_rbc_default_emed"]),
-    ]
-    for name, ckpt, tag, extra, deps in evals:
-        add(Task(name, _eval(ckpt, tag, *extra), [f"data/{tag}_fullyear_eval.csv"],
-                 deps=deps, pool="eval", env=EVAL_ENV))
-    add(Task("E10_emed_fromscratch_5y_test",
-             " ".join(_eval("runs/emed_fromscratch_amorpheus_y2/model_s0.eqx", "emed_fromscratch_y2_test", *emed))
-             + " && mv data/emed_fromscratch_y2_test_fullyear_eval.csv data/emed_fromscratch_5y_test_fullyear_eval.csv",
-             ["data/emed_fromscratch_5y_test_fullyear_eval.csv"],
-             deps=["T11_emed_fromscratch_y2", "R3_rbc_default_emed"], pool="eval", env=EVAL_ENV))
+        add(Task(f"B1b_bc_fit{suf}",
+                 _py("bc_fit.py", "--policy-steps", 20000, "--out", ckpt("transfer4_bc_long"),
+                     *([] if seed == 0 else ["--seed", S])),
+                 [ckpt("transfer4_bc_long")], deps=["B1a_bc_collect"], pool="light",
+                 note="thesis: 20k Adam steps, lr 3e-4 (fit budget of the original _long run not logged)"))
+        add(Task(f"T1_transfer4_persistent_long{suf}",
+                 _train("train_allactive.py", "--task", "task_occ_e0", "--total-steps", 5376000,
+                        "--n-steps", 672, "--lr", "5e-5", "--ent-coef", 0.01, "--gamma", 0.98,
+                        "--seed", S, "--out", out("transfer4_persistent_long")),
+                 [ckpt("transfer4_persistent_long")], pool="train",
+                 note="from-scratch comfort (400 updates at the era's n_steps=672)"))
+        add(Task(f"T2_transfer4_bcwarm{suf}",
+                 _train("train_allactive.py", "--task", "task_occ_e0", "--years", 1, "--lr", "2e-5",
+                        "--ent-coef", 0.0, "--gamma", 0.99, "--seed", S,
+                        "--init-checkpoint", ckpt("transfer4_bc_long"),
+                        "--out", out("transfer4_bcwarm")),
+                 [ckpt("transfer4_bcwarm")], deps=[f"B1b_bc_fit{suf}"], pool="train"))
+        add(Task(f"T3_dagger_y1{suf}",
+                 _train("dagger_stream_amorpheus.py", "--task", "task_occ_e0", "--total-steps", 2000000,
+                        "--n-steps", 512, "--updates-per-cycle", 32, "--minibatch", 256,
+                        "--buffer-cap", 100000, "--beta-half-life", 200000,
+                        "--checkpoint-every", 10, "--snapshot-every", 50, "--seed", S,
+                        "--out", out("dagger_stream_e0_amorpheus")),
+                 [ckpt("dagger_stream_e0_amorpheus")],
+                 deps=["R2_join_tuned_train_baseline"], pool="train"))
+        add(Task(f"T4_dagger_y2{suf}",
+                 _train("dagger_stream_amorpheus.py", "--task", "task_occ_e0", "--total-steps", 2000000,
+                        "--n-steps", 512, "--updates-per-cycle", 64, "--minibatch", 256,
+                        "--buffer-cap", 500000, "--beta-half-life", 1000, "--seed", S,
+                        "--init-checkpoint", ckpt("dagger_stream_e0_amorpheus"),
+                        "--checkpoint-every", 10, "--snapshot-every", 50,
+                        "--out", out("dagger_stream_e0_amorpheus_y2")),
+                 [ckpt("dagger_stream_e0_amorpheus_y2")], deps=[f"T3_dagger_y1{suf}"], pool="train"))
+        add(Task(f"T5_dagger_ppoft{suf}",
+                 _train("train_allactive.py", "--task", "task_occ_e0", "--years", 1, "--ent-coef", 0,
+                        "--lr", "2e-5", "--seed", S,
+                        "--init-checkpoint", ckpt("dagger_stream_e0_amorpheus_y2"),
+                        "--out", out("dagger_stream_e0_ppoft")),
+                 [ckpt("dagger_stream_e0_ppoft")], deps=[f"T4_dagger_y2{suf}"], pool="train"))
+        add(Task(f"T6_spe_y1{suf}",
+                 _py("dagger_stream_amorpheus.py", "--bridge", "spe", "--seed", S,
+                     "--out", out("dagger_stream_spe_amorpheus")),
+                 [ckpt("dagger_stream_spe_amorpheus")],
+                 deps=["R2_join_tuned_train_baseline"], pool="train",
+                 note="all other flags at defaults = y1 protocol"))
+        add(Task(f"T7_spe_y2{suf}",
+                 _py("dagger_stream_amorpheus.py", "--bridge", "spe", "--seed", S,
+                     "--init-checkpoint", ckpt("dagger_stream_spe_amorpheus"),
+                     "--beta-half-life", 1000, "--out", out("dagger_stream_spe_amorpheus_y2")),
+                 [ckpt("dagger_stream_spe_amorpheus_y2")], deps=[f"T6_spe_y1{suf}"], pool="train",
+                 note="kept defaults updates-per-cycle 32 / buffer 100k (as the original run did)"))
+        add(Task(f"T8_critic_year_emed{suf}",
+                 _train("dagger_stream_amorpheus.py", "--critic-only", "--task", "task_occ_emed",
+                        "--total-steps", 2000000, "--n-steps", 512, "--updates-per-cycle", 64,
+                        "--minibatch", 256, "--buffer-cap", 500000, "--beta-half-life", 1000, "--seed", S,
+                        "--init-checkpoint", ckpt("dagger_stream_e0_amorpheus_y2"),
+                        "--checkpoint-every", 10, "--snapshot-every", 50,
+                        "--out", out("dagger_stream_emed_criticyear")),
+                 [ckpt("dagger_stream_emed_criticyear")], deps=[f"T4_dagger_y2{suf}"], pool="train"))
+        add(Task(f"T9_emed_ppoft{suf}",
+                 _train("train_allactive.py", "--task", "task_occ_emed", "--years", 1, "--ent-coef", 0,
+                        "--lr", "2e-5", "--seed", S,
+                        "--init-checkpoint", ckpt("dagger_stream_emed_criticyear"),
+                        "--out", out("dagger_emed_ppoft")),
+                 [ckpt("dagger_emed_ppoft")], deps=[f"T8_critic_year_emed{suf}"], pool="train"))
+        add(Task(f"T10_emed_fromscratch{suf}",
+                 _train("train_allactive.py", "--task", "task_occ_emed", "--total-steps", 5376000,
+                        "--lr", "5e-5", "--ent-coef", 0.01, "--seed", S,
+                        "--out", out("emed_fromscratch_amorpheus")),
+                 [ckpt("emed_fromscratch_amorpheus")], pool="train"))
+        add(Task(f"T11_emed_fromscratch_y2{suf}",
+                 _train("train_allactive.py", "--task", "task_occ_emed", "--lr", "5e-05",
+                        "--ent-coef", 0.01, "--total-steps", 5376000, "--seed", S,
+                        "--init-checkpoint", ckpt("emed_fromscratch_amorpheus"),
+                        "--out", out("emed_fromscratch_amorpheus_y2")),
+                 [ckpt("emed_fromscratch_amorpheus_y2")],
+                 deps=[f"T10_emed_fromscratch{suf}"], pool="train"))
+
+        emed = ["--task", "task_occ_emed", "--baselines", "data/rbc_emed_fullyear.json"]
+        evals = [
+            ("E1_transfer4_final", "transfer4_persistent_long", "transfer4_final", [], [f"T1_transfer4_persistent_long{suf}", "R0_rbc_default_e0"]),
+            ("E2_transfer4_bcwarm", "transfer4_bcwarm", "transfer4_bcwarm", [], [f"T2_transfer4_bcwarm{suf}", "R0_rbc_default_e0"]),
+            ("E3_bcwarm_train", "transfer4_bcwarm", "bcwarm_train",
+             ["--split", "train", "--baselines", "data/tuned_train_baseline.json"],
+             [f"T2_transfer4_bcwarm{suf}", "R2_join_tuned_train_baseline"]),
+            ("E4_dagger_y1_test", "dagger_stream_e0_amorpheus", "dagger_stream_y1_test", [], [f"T3_dagger_y1{suf}", "R0_rbc_default_e0"]),
+            ("E5_dagger_y2_test", "dagger_stream_e0_amorpheus_y2", "dagger_stream_y2_test", [], [f"T4_dagger_y2{suf}", "R0_rbc_default_e0"]),
+            ("E6_dagger_ppoft_test", "dagger_stream_e0_ppoft", "dagger_ppoft_test", [], [f"T5_dagger_ppoft{suf}", "R0_rbc_default_e0"]),
+            ("E7_spe_y2_test", "dagger_stream_spe_amorpheus_y2", "spe_y2_test", ["--bridge", "spe"], [f"T7_spe_y2{suf}", "R0_rbc_default_e0"]),
+            ("E8_emed_ppoft_test", "dagger_emed_ppoft", "emed_ppoft_test", emed, [f"T9_emed_ppoft{suf}", "R3_rbc_default_emed"]),
+            ("E9_emed_fromscratch_test", "emed_fromscratch_amorpheus", "emed_fromscratch_test", emed, [f"T10_emed_fromscratch{suf}", "R3_rbc_default_emed"]),
+        ]
+        for name, rundir, tag, extra, deps in evals:
+            add(Task(f"{name}{suf}", _eval(ckpt(rundir), f"{tag}{suf}", *extra),
+                     [f"data/{tag}{suf}_fullyear_eval.csv"], deps=deps, pool="eval", env=EVAL_ENV))
+        add(Task(f"E10_emed_fromscratch_5y_test{suf}",
+                 " ".join(_eval(ckpt("emed_fromscratch_amorpheus_y2"), f"emed_fromscratch_y2_test{suf}", *emed))
+                 + f" && mv data/emed_fromscratch_y2_test{suf}_fullyear_eval.csv data/emed_fromscratch_5y_test{suf}_fullyear_eval.csv",
+                 [f"data/emed_fromscratch_5y_test{suf}_fullyear_eval.csv"],
+                 deps=[f"T11_emed_fromscratch_y2{suf}", "R3_rbc_default_emed"], pool="eval", env=EVAL_ENV))
+
+    # ---- Single-seed: energy-tuned panel (reads E8 seed 0), diagnostics, figures
     add(Task("R5_emedtuned_rbc_eval",
              _py("eval_fullyear_emedtuned_rbc.py", "--n-workers", 20),
              ["data/emedtuned_rbc_test_fullyear_eval.csv"],
              deps=["R4_tune_emed_pertypecz", "R3_rbc_default_emed", "E8_emed_ppoft_test"], pool="eval",
              note="also prints the re-judgment, which reads E8's CSV"))
-
-    # ---- Diagnostic rollouts -------------------------------------------------
     add(Task("D1_policy_vs_rbc", _py("rollout_policy_vs_rbc.py"),
              ["data/policy_vs_rbc_rollout.npz"], deps=["T1_transfer4_persistent_long"], pool="diag"))
     add(Task("D2_supply_symmetry",
@@ -232,12 +242,9 @@ def build_tasks() -> list[Task]:
                  "--steps", 2016, "--with-default-rbc"),
              ["data/branch_compare_OfficeMedium_test0.npz"],
              deps=["T11_emed_fromscratch_y2", "R4_tune_emed_pertypecz"], pool="diag"))
-
-    # ---- Figures ----------------------------------------------------------
     add(Task("FIG_make_thesis_figures", f"PY={PY} bash figures/make_thesis_figures.sh",
              ["figures_out/comfort_summary.pdf"],
-             deps=[t.name for t in T if t.name[:1] in "ERD" and t.name != "R2_join_tuned_train_baseline"]
-                  + ["R2_join_tuned_train_baseline"],
+             deps=[t.name for t in T if t.name[:1] in "ERD" and not t.name.endswith(tuple(f"_seed{s}" for s in (seeds or [])))],
              pool="light"))
     return T
 
@@ -258,12 +265,17 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", nargs="*", default=None, help="task name prefixes to run (deps implied)")
     ap.add_argument("--poll", type=float, default=5.0)
+    ap.add_argument("--seeds", type=int, nargs="*", default=None,
+                    help="extra learner seeds: add a seed-suffixed copy of every learned chain")
+    ap.add_argument("--pool-train", type=int, default=None, help="override the training pool size")
     ap.add_argument("--fresh", action="store_true",
                     help="delete every task's outputs first (a checkout carries the banked "
                          "results as tracked files; a reproduction must regenerate them)")
     args = ap.parse_args()
 
-    tasks = {t.name: t for t in build_tasks()}
+    if args.pool_train:
+        POOL_CAP["train"] = args.pool_train
+    tasks = {t.name: t for t in build_tasks(args.seeds)}
     if args.only:
         keep: set[str] = set()
         stack = [n for n in tasks if any(n.startswith(p) for p in args.only)]
