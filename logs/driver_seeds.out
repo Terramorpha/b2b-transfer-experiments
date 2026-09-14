@@ -1,0 +1,27 @@
+[2026-09-14 13:41:10] REPRODUCE START: 98 tasks, 54 already done, PY=/home/terramorpha/code_sync/maitrise/b2b-transfer-experiments/.venv/bin/python
+[2026-09-14 13:41:10] START B1b_bc_fit_seed1 [light] pid=104535
+[2026-09-14 13:41:10] START T1_transfer4_persistent_long_seed1 [train] pid=104536
+[2026-09-14 13:41:10] START T3_dagger_y1_seed1 [train] pid=104537
+[2026-09-14 13:41:10] START T6_spe_y1_seed1 [train] pid=104538
+[2026-09-14 13:41:10] START T10_emed_fromscratch_seed1 [train] pid=104539
+[2026-09-14 13:41:10] START B1b_bc_fit_seed2 [light] pid=104540
+[2026-09-14 13:41:10] START T1_transfer4_persistent_long_seed2 [train] pid=104541
+[2026-09-14 14:44:30] FAILED B1b_bc_fit_seed1 rc=-15 in 63.3 min (outputs present: False) -> logs/B1b_bc_fit_seed1.log
+[2026-09-14 14:44:30] FAILED T1_transfer4_persistent_long_seed1 rc=-15 in 63.3 min (outputs present: True) -> logs/T1_transfer4_persistent_long_seed1.log
+[2026-09-14 14:44:30] FAILED T10_emed_fromscratch_seed1 rc=-15 in 63.3 min (outputs present: True) -> logs/T10_emed_fromscratch_seed1.log
+[2026-09-14 14:44:30] FAILED B1b_bc_fit_seed2 rc=-15 in 63.3 min (outputs present: False) -> logs/B1b_bc_fit_seed2.log
+[2026-09-14 14:44:30] FAILED T1_transfer4_persistent_long_seed2 rc=-15 in 63.3 min (outputs present: True) -> logs/T1_transfer4_persistent_long_seed2.log
+[2026-09-14 14:44:30] BLOCKED T2_transfer4_bcwarm_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED T11_emed_fromscratch_y2_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E1_transfer4_final_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E2_transfer4_bcwarm_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E3_bcwarm_train_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E9_emed_fromscratch_test_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E10_emed_fromscratch_5y_test_seed1 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED T2_transfer4_bcwarm_seed2 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E1_transfer4_final_seed2 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E2_transfer4_bcwarm_seed2 (failed dependency)
+[2026-09-14 14:44:30] BLOCKED E3_bcwarm_train_seed2 (failed dependency)
+[2026-09-14 14:44:30] START T3_dagger_y1_seed2 [train] pid=106742
+[2026-09-14 14:44:30] START T6_spe_y1_seed2 [train] pid=106743
+[2026-09-14 14:44:30] START T10_emed_fromscratch_seed2 [train] pid=106744
