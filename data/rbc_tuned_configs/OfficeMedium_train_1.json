@@ -3,6 +3,8 @@
   "index": 1,
   "split": "train",
   "is_vav": true,
+  "task": "task_occ_e0",
+  "building_id": "OfficeMedium-4002",
   "tuned_return": -5396.596708648663,
   "params": {
     "sat_neutral": 17.745401188473625,

@@ -1,0 +1,4 @@
+[2026-09-13 21:53:46] REPRODUCE START: 2 tasks, 1 already done, PY=/home/terramorpha/code_sync/maitrise/b2b-transfer-experiments/.venv/bin/python
+[2026-09-13 21:53:46] START R1_pertype_bo_eval [eval] pid=44320
+[2026-09-13 21:59:12] DONE R1_pertype_bo_eval rc=0 in 5.4 min
+[2026-09-13 21:59:12] REPRODUCE END {"done": 2, "failed": 0, "blocked": 0, "pending": 0}
