@@ -1,0 +1,23 @@
+{
+  "building_type": "RetailStandalone",
+  "index": 10,
+  "split": "train",
+  "is_vav": false,
+  "task": "task_occ_emed",
+  "building_id": "RetailStandalone-2011",
+  "tuned_return": -49658.52090033228,
+  "params": {
+    "kp": 0.09101852554368013,
+    "ki": 0.0005364525490410626,
+    "integral_max": 24.81366248551634,
+    "min_fan_fraction": 0.0159971925495499,
+    "sat_min_c": 5.079988639629441,
+    "sat_max_c": 40.413654251611916,
+    "sat_initial_c": 22.596850194247118,
+    "sat_trim": 0.5602109437479121,
+    "sat_respond": 3.368855743849656,
+    "demand_deadband": 0.3845963712986108,
+    "availability_on": 0.5960479858720049,
+    "fan_error_mode": "nearest_setpoint"
+  }
+}

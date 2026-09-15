@@ -1,0 +1,23 @@
+{
+  "building_type": "OfficeSmall",
+  "index": 2,
+  "split": "train",
+  "is_vav": false,
+  "task": "task_occ_emed",
+  "building_id": "OfficeSmall-5003",
+  "tuned_return": -36989.88661731566,
+  "params": {
+    "kp": 0.01585168008851607,
+    "ki": 0.0017817550118666681,
+    "integral_max": 49.07643338891549,
+    "min_fan_fraction": 0.4886980823339174,
+    "sat_min_c": 9.880564578114596,
+    "sat_max_c": 53.91648584947795,
+    "sat_initial_c": 19.419575549636043,
+    "sat_trim": 0.06207604847850843,
+    "sat_respond": 0.43980832450521684,
+    "demand_deadband": 1.9599635896651075,
+    "availability_on": 2.8459449515331077,
+    "fan_error_mode": "center_of_band"
+  }
+}

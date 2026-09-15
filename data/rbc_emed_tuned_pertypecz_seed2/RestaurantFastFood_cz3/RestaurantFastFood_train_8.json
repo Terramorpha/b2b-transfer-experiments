@@ -1,0 +1,23 @@
+{
+  "building_type": "RestaurantFastFood",
+  "index": 8,
+  "split": "train",
+  "is_vav": false,
+  "task": "task_occ_emed",
+  "building_id": "RestaurantFastFood-3010",
+  "tuned_return": -17686.359055420256,
+  "params": {
+    "kp": 0.14275528015085429,
+    "ki": 0.003510364659776595,
+    "integral_max": 39.16475819024571,
+    "min_fan_fraction": 0.4439129987466017,
+    "sat_min_c": 11.233100325360397,
+    "sat_max_c": 48.269263976277195,
+    "sat_initial_c": 11.995016403357937,
+    "sat_trim": 0.3545713794582485,
+    "sat_respond": 0.10277950674775038,
+    "demand_deadband": 0.9358384328243713,
+    "availability_on": 0.8473134878814561,
+    "fan_error_mode": "nearest_setpoint"
+  }
+}

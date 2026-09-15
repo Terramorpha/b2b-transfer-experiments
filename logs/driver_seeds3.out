@@ -1,0 +1,16 @@
+[2026-09-15 16:23:55] REPRODUCE START: 98 tasks, 91 already done, PY=/home/terramorpha/code_sync/maitrise/b2b-transfer-experiments/.venv/bin/python
+[2026-09-15 16:23:55] START T8_critic_year_emed_seed2 [train] pid=177095
+[2026-09-15 16:23:55] START T10_emed_fromscratch_seed2 [train] pid=177096
+[2026-09-15 17:09:55] DONE T8_critic_year_emed_seed2 rc=0 in 46.0 min
+[2026-09-15 17:09:55] START T9_emed_ppoft_seed2 [train] pid=180998
+[2026-09-15 17:52:25] DONE T9_emed_ppoft_seed2 rc=0 in 42.5 min
+[2026-09-15 17:52:25] START E8_emed_ppoft_test_seed2 [eval] pid=185002
+[2026-09-15 17:55:40] DONE E8_emed_ppoft_test_seed2 rc=0 in 3.3 min
+[2026-09-15 18:12:45] DONE T10_emed_fromscratch_seed2 rc=0 in 108.8 min
+[2026-09-15 18:12:45] START T11_emed_fromscratch_y2_seed2 [train] pid=188654
+[2026-09-15 18:12:45] START E9_emed_fromscratch_test_seed2 [eval] pid=188655
+[2026-09-15 18:15:45] DONE E9_emed_fromscratch_test_seed2 rc=0 in 3.0 min
+[2026-09-15 19:32:00] DONE T11_emed_fromscratch_y2_seed2 rc=0 in 79.3 min
+[2026-09-15 19:32:00] START E10_emed_fromscratch_5y_test_seed2 [eval] pid=192626
+[2026-09-15 19:34:25] DONE E10_emed_fromscratch_5y_test_seed2 rc=0 in 2.4 min
+[2026-09-15 19:34:25] REPRODUCE END {"done": 98, "failed": 0, "blocked": 0, "pending": 0}
