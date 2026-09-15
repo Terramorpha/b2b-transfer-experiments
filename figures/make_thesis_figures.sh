@@ -65,7 +65,14 @@ with open("data/_amo_bcwarm_eval.csv", "w", newline="") as f:
 print("derived inputs written")
 EOF
 
-port() { $PY figures/build_transfer_port_figure.py "$@"; }
+# SEEDS=1 bash figures/make_thesis_figures.sh -> every learned series is the
+# mean over learner seeds (seed-0 file + data/<stem>_seed*_fullyear_eval.csv)
+# with capped error bars (std). Overlays (tuned RBC, plain-y2, 2.6y) stay
+# single-run. Rendering is otherwise identical.
+port() { $PY figures/build_transfer_port_figure.py ${SEEDS:+--with-seeds} "$@"; }
+# the derived _amo_bcwarm_eval.csv has no seed siblings; use the raw eval CSV
+BCWARM_EVAL=${SEEDS:+data/transfer4_bcwarm_fullyear_eval.csv}
+BCWARM_EVAL=${BCWARM_EVAL:-data/_amo_bcwarm_eval.csv}
 
 echo "== fullyear (from-scratch, HORIZON-VERIFIED transfer4_final) =="
 port --eval-csv data/transfer4_final_fullyear_eval.csv \
@@ -73,12 +80,12 @@ port --eval-csv data/transfer4_final_fullyear_eval.csv \
      --ours-label "Ours" --outdir figures_out_fullyear --prefix fullyear
 
 echo "== bcwarm (test) =="
-port --eval-csv data/_amo_bcwarm_eval.csv \
+port --eval-csv $BCWARM_EVAL \
      --baseline-csv data/_default_baseline_fullyear.csv \
      --ours-label "Ours" --outdir figures_out_bcwarm --prefix bcwarm
 
 echo "== tuned_vs_amorpheus (test, tuned-RBC overlay) =="
-port --eval-csv data/_amo_bcwarm_eval.csv \
+port --eval-csv $BCWARM_EVAL \
      --baseline-csv data/_default_baseline_fullyear.csv \
      --ceiling-json data/_tuned_ceiling.json \
      --ours-label "Amorpheus (BC-warm)" --ceiling-label "Tuned RBC" \
@@ -135,7 +142,7 @@ port --eval-csv data/dagger_ppoft_test_fullyear_eval.csv \
      --reference-label "Default RBC" --prefix dagger_ppoft
 
 echo "== comfort summary (all methods vs tuned RBC, one panel) =="
-$PY figures/build_comfort_summary_figure.py
+$PY figures/build_comfort_summary_figure.py ${SEEDS:+--with-seeds}
 
 echo "== trace diagnostics (policy vs RBC actions / fan speed) =="
 $PY figures/build_policy_vs_rbc_actions_figure.py

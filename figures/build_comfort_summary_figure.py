@@ -16,14 +16,16 @@ controller's fixed entity colour, per house rules).
 """
 from __future__ import annotations
 
+import argparse
 import csv
+import glob
 import os
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pub_style import apply_pub_style, save, TEXTWIDTH_IN
+from pub_style import apply_pub_style, save, TEXTWIDTH_IN, INK
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -52,8 +54,22 @@ def _typ(bid):
             return t
 
 
+def _seed_files(fname: str, with_seeds: bool) -> list[str]:
+    """[seed-0 file] + sibling <stem>_seed*_fullyear_eval.csv when requested."""
+    base = os.path.join(D, fname)
+    if not with_seeds:
+        return [base]
+    stem = fname[:-len("_fullyear_eval.csv")]
+    return [base] + sorted(glob.glob(os.path.join(D, f"{stem}_seed*_fullyear_eval.csv")))
+
+
 def main() -> None:
     import json
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--with-seeds", action="store_true",
+                    help="bars = mean over learner seeds (seed-0 file + <stem>_seed*), "
+                         "capped error bars = std (ddof=1); single-seed rendering unchanged")
+    args = ap.parse_args()
     apply_pub_style()
     default = json.load(open(os.path.join(D, "rbc_fullyear_ourharness.json")))
     bo = _load(os.path.join(D, "pertype_bo_fullyear_eval.csv"))
@@ -67,9 +83,15 @@ def main() -> None:
                 agg[t][1] += default[b]
         return {t: s / sd for t, (s, sd) in agg.items()}
 
-    norms = {name: norm_by_default(_load(os.path.join(D, fname)))
-             for name, fname, _c in METHODS}
-    norms["tuned RBC"] = norm_by_default(bo)
+    # per method: list of per-seed {type: norm}; single seed -> one entry
+    per_seed = {name: [norm_by_default(_load(p)) for p in _seed_files(fname, args.with_seeds)]
+                for name, fname, _c in METHODS}
+    per_seed["tuned RBC"] = [norm_by_default(bo)]
+    norms = {name: {t: float(np.mean([s[t] for s in runs])) for t, _ in TYPES}
+             for name, runs in per_seed.items()}
+    errs = {name: ({t: float(np.std([s[t] for s in runs], ddof=1)) for t, _ in TYPES}
+                   if len(runs) > 1 else None)
+            for name, runs in per_seed.items()}
 
     series = METHODS + [("tuned RBC", None, "#eb6834")]  # REACTIVE_COLOR
 
@@ -84,9 +106,12 @@ def main() -> None:
     for j, (name, _f, color) in enumerate(series):
         vals = [norms[name][t] for t, _ in TYPES]
         hatch = "//" if name == "tuned RBC" else None   # secondary channel (red~orange WARN)
+        yerr = [errs[name][t] for t, _ in TYPES] if errs[name] else None
         ax.bar(xs + (j - (n_m - 1) / 2) * width, vals, width * 0.92,
                color=color, alpha=0.6, linewidth=0, hatch=hatch,
-               edgecolor=color, label=name)
+               edgecolor=color, label=name, yerr=yerr,
+               error_kw=(dict(ecolor=INK["primary"], elinewidth=0.8, capsize=2,
+                              capthick=0.8) if yerr is not None else None))
     ax.axhline(1.0, color="#0b0b0b", linewidth=1.0, linestyle="--")
     ax.set_xticks(xs)
     ax.set_xticklabels([short for _, short in TYPES])
@@ -98,8 +123,9 @@ def main() -> None:
     save(fig, os.path.join(REPO, "figures_out", "comfort_summary"))
     print("wrote figures_out/comfort_summary.pdf (+_preview.png)")
     for name, _f, _c in series:
-        row = "  ".join(f"{t[1]}:{norms[name][t[0]]:.2f}" for t in TYPES)
-        print(f"  {name:14s} {row}")
+        row = "  ".join(f"{t[1]}:{norms[name][t[0]]:.2f}"
+                        + (f"+-{errs[name][t[0]]:.2f}" if errs[name] else "") for t in TYPES)
+        print(f"  {name:14s} n_seeds={len(per_seed[name])} {row}")
 
 
 if __name__ == "__main__":

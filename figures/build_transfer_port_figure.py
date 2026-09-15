@@ -11,6 +11,7 @@ Colours from pub_style (nothing by eye): Baseline = reactive orange
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 
@@ -89,6 +90,10 @@ def main() -> None:
     ap.add_argument("--ceiling2-color", default=None)
     ap.add_argument("--reference-label", default="Baseline (G36)",
                     help="label for the normalized-return reference line (=1.0 baseline)")
+    ap.add_argument("--with-seeds", action="store_true",
+                    help="also load sibling files <stem>_seed*_fullyear_eval.csv of --eval-csv "
+                         "(one learner seed each); per-building mean/std across them "
+                         "-> capped error bars on 'Ours' (std of n seeds, ddof=1)")
     args = ap.parse_args()
     figdir, prefix = args.outdir, args.prefix
     clabel = args.ceiling_label if args.ceiling_json else None
@@ -97,6 +102,15 @@ def main() -> None:
                ceiling2_label=c2label, ceiling2_color=args.ceiling2_color)
 
     df = pd.read_csv(args.eval_csv)
+    if args.with_seeds:
+        stem = args.eval_csv[:-len("_fullyear_eval.csv")] if args.eval_csv.endswith("_fullyear_eval.csv") else None
+        sibs = sorted(glob.glob(f"{stem}_seed*_fullyear_eval.csv")) if stem else []
+        if sibs:
+            frames = [df.assign(seed=0)]
+            for k, p in enumerate(sibs, 1):
+                frames.append(pd.read_csv(p).assign(seed=k))
+            df = pd.concat(frames, ignore_index=True)
+        print(f"  seeds: 1 + {len(sibs)} sibling file(s) -> {df.groupby('building_id').size().max()} runs/building")
     bdf = pd.read_csv(args.baseline_csv)
     ours = (df.groupby(["building_type", "building_id"])["episode_return"]
               .agg(["mean", "std"]).reset_index())
