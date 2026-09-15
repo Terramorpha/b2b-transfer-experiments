@@ -111,6 +111,9 @@ def main():
     ap.add_argument("--out-dir", default=CONFIG_DIR,
                     help="where the winning config json goes "
                          "(use a separate dir per objective!)")
+    ap.add_argument("--seed", type=int, default=42,
+                    help="TPE sampler seed (42 = the thesis campaigns); vary it to "
+                         "measure the tuned bar's own run-to-run spread")
     ap.add_argument("--enqueue-json", default=None,
                     help="warm start: enqueue this config json's params as "
                          "trial 0 (e.g. the building's per-(type,CZ) tuned "
@@ -135,7 +138,7 @@ def main():
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(n_startup_trials=4, seed=42))
+        sampler=optuna.samplers.TPESampler(n_startup_trials=4, seed=args.seed))
     if args.enqueue_json is not None:
         warm = json.load(open(args.enqueue_json))["params"]
         study.enqueue_trial(warm)

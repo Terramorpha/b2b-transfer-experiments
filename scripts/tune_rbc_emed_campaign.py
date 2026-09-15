@@ -42,10 +42,15 @@ def _cz(bt, bid):
 
 
 def main():
+    global OUT_DIR
     ap = argparse.ArgumentParser()
     ap.add_argument("--n-workers", type=int, default=3)
     ap.add_argument("--n-trials", type=int, default=25)
+    ap.add_argument("--out-dir", default=OUT_DIR,
+                    help="config dir (default data/rbc_emed_tuned_pertypecz)")
+    ap.add_argument("--seed", type=int, default=42, help="TPE seed passed to the tuner")
     args = ap.parse_args()
+    OUT_DIR = args.out_dir if os.path.isabs(args.out_dir) else os.path.join(REPO, args.out_dir)
     reg = get_registry()
 
     # 1. (type, CZ) pairs needed to cover the TEST set
@@ -98,7 +103,7 @@ def main():
             PY, os.path.join(REPO, "scripts", "tune_rbc_comfort.py"),
             "--building-type", t, "--index", str(i), "--split", "train",
             "--task", "task_occ_emed", "--n-trials", str(args.n_trials),
-            "--out-dir", pair_dir]))
+            "--seed", str(args.seed), "--out-dir", pair_dir]))
 
     def run(job):
         (t, cz, i, bid), cmd = job

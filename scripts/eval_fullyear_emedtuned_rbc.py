@@ -41,18 +41,18 @@ TASK, RP, N, MAX_STEPS = "task_occ_emed", "full_year", 5, 106000
 TUNED_DIR = os.path.join(REPO, "data", "rbc_emed_tuned_pertypecz")
 
 
-def _lookup_params(bt: str, cz) -> dict:
+def _lookup_params(bt: str, cz, tuned_dir: str = TUNED_DIR) -> dict:
     """The deployment table: (type, CZ) -> tuned params from the train instance."""
-    hits = glob.glob(os.path.join(TUNED_DIR, f"{bt}_cz{cz}", "*.json"))
+    hits = glob.glob(os.path.join(tuned_dir, f"{bt}_cz{cz}", "*.json"))
     assert len(hits) == 1, f"no unique tuned config for ({bt}, cz{cz}): {hits}"
     return json.load(open(hits[0]))["params"]
 
 
 def _worker(args):
-    bt, idx, bid = args
+    bt, idx, bid, tuned_dir = args
     cz = (None if bt in b2b.TYPES_WITHOUT_CLIMATE_ZONE
           else b2b.get_climate_zone(bt, bid))
-    params = _lookup_params(bt, cz)
+    params = _lookup_params(bt, cz, tuned_dir)
     is_vav = bt == "OfficeMedium"
     cfg = AirLoopConfig(**params) if is_vav else UnitaryHvacConfig(**params)
     pol = AirLoopPolicy(cfg) if is_vav else UnitaryHvacPolicy(cfg)
@@ -75,12 +75,17 @@ def _worker(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n-workers", type=int, default=3)
+    ap.add_argument("--tuned-dir", default=TUNED_DIR,
+                    help="config dir of an energy-tuned campaign (per-(type,CZ) subdirs)")
+    ap.add_argument("--tag", default="emedtuned_rbc_test",
+                    help="output data/<tag>_fullyear_eval.csv")
     args = ap.parse_args()
+    tuned_dir = args.tuned_dir if os.path.isabs(args.tuned_dir) else os.path.join(REPO, args.tuned_dir)
 
     reg = get_registry()
     ids = {(bt, idx): reg.get_building_by_index(bt, "test", idx).building_id
            for bt in TYPES for idx in range(N)}
-    tasks = [(bt, idx, ids[(bt, idx)]) for idx in range(N) for bt in TYPES]
+    tasks = [(bt, idx, ids[(bt, idx)], tuned_dir) for idx in range(N) for bt in TYPES]
 
     rows = []
     print(f"[eval-emedtuned] {len(tasks)} full-year lookup-RBC rollouts | "
@@ -96,7 +101,7 @@ def main():
                   f"emed-tuned RBC {ret:10.1f}  ({steps} steps)", flush=True)
 
     df = pd.DataFrame(rows)
-    out = os.path.join(REPO, "data", "emedtuned_rbc_test_fullyear_eval.csv")
+    out = os.path.join(REPO, "data", f"{args.tag}_fullyear_eval.csv")
     df.to_csv(out, index=False)
     print(f"[done] {out}")
 
