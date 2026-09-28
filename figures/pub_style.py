@@ -204,14 +204,18 @@ def grouped_barh(ax, categories, series, *, invert: bool = True,
 
 
 def save(fig, path: str | Path) -> None:
-    """Save as vector PDF at true size (tight bbox, no title, transparent
-    background). ``transparent=True`` is explicit here (not just the rcParam
+    """Save as vector PDF **and SVG** at true size (tight bbox, no title,
+    transparent background). ``transparent=True`` is explicit here (not just the rcParam
     defaults) so every figure has NO opaque fill -- the compiled LaTeX page
     shows through directly, guaranteed to match regardless of the exact white
     the page renderer uses."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(
-        path.with_suffix(".pdf"), bbox_inches="tight", pad_inches=0.02, transparent=True
-    )
+    # Two vector twins of the same render: PDF for LaTeX, SVG for everything
+    # else (org/HTML export, slides, editing). Same bbox/padding/transparency
+    # so they are interchangeable; the PDF stays the thesis deliverable.
+    for suffix in (".pdf", ".svg"):
+        fig.savefig(
+            path.with_suffix(suffix), bbox_inches="tight", pad_inches=0.02, transparent=True
+        )
     plt.close(fig)
