@@ -13,7 +13,7 @@ Outputs (house style, one PDF per panel):
   branch_sat           mean commanded SAT per branch, first N days
 
     python figures/build_branch_compare_figure.py \
-        [data/branch_compare_OfficeMedium_test0.npz] [trace_days]
+        [data/branch_compare_OfficeMedium_test0.npz] [trace_days] [suffix] [policy label]
 """
 from __future__ import annotations
 
@@ -31,12 +31,14 @@ REPO = os.path.dirname(HERE)
 NPZ = (sys.argv[1] if len(sys.argv) > 1
        else os.path.join(REPO, "data", "branch_compare_OfficeMedium_test0.npz"))
 TRACE_DAYS = float(sys.argv[2]) if len(sys.argv) > 2 else 3.0
+SUFFIX = sys.argv[3] if len(sys.argv) > 3 else ""          # e.g. "_oaclamp"
+POLICY_LABEL = sys.argv[4] if len(sys.argv) > 4 else "From-scratch PPO (5.1 y)"
 FIGDIR = os.path.join(REPO, "figures_out")
 STEPS_PER_DAY = 12 * 24
 
 # colour follows the entity (validated triple, all PASS):
 STYLE = {  # branch key -> (color, label)
-    "policy": (W_E_COLORS["e0"], "From-scratch PPO (5.1 y)"),
+    "policy": (W_E_COLORS["e0"], POLICY_LABEL),
     "tuned_rbc": (W_E_COLORS["e05"], "Energy-tuned RBC"),
     "default_rbc": (REACTIVE_COLOR, "Default RBC"),
 }
@@ -58,9 +60,9 @@ def main() -> None:
 
     # --- cumulative panels -------------------------------------------------
     for key, ylabel, stem in [
-        ("energy", "Cumulative energy penalty", "branch_cum_energy"),
-        ("comfort", "Cumulative comfort penalty", "branch_cum_comfort"),
-        ("gas", "Cumulative gas consumption", "branch_cum_gas"),
+        ("energy", "Cumulative energy penalty", f"branch_cum_energy{SUFFIX}"),
+        ("comfort", "Cumulative comfort penalty", f"branch_cum_comfort{SUFFIX}"),
+        ("gas", "Cumulative gas consumption", f"branch_cum_gas{SUFFIX}"),
     ]:
         fig, ax = plt.subplots(figsize=(COLWIDTH_IN, 2.35))
         for sp in ("top", "right"):
@@ -104,9 +106,9 @@ def main() -> None:
     ax.set_ylim(lo, hi + 0.42 * (hi - lo))  # headroom so the legend clears the data
     ax.legend(loc="upper left", ncol=3, frameon=False, fontsize=7.5)
     fig.tight_layout()
-    preview(fig, os.path.join(FIGDIR, "branch_traces_preview"), dpi=200)
-    save(fig, os.path.join(FIGDIR, "branch_traces"))
-    print("wrote:", os.path.join(FIGDIR, "branch_traces.pdf"))
+    preview(fig, os.path.join(FIGDIR, f"branch_traces{SUFFIX}_preview"), dpi=200)
+    save(fig, os.path.join(FIGDIR, f"branch_traces{SUFFIX}"))
+    print("wrote:", os.path.join(FIGDIR, f"branch_traces{SUFFIX}.pdf"))
 
     if sat_i:
         fig, ax = plt.subplots(figsize=(TEXTWIDTH_IN, 2.4))
@@ -124,9 +126,9 @@ def main() -> None:
         ax.set_ylabel("Mean commanded SAT (°C)")
         ax.legend(loc="upper left", ncol=3, frameon=False, fontsize=7.5)
         fig.tight_layout()
-        preview(fig, os.path.join(FIGDIR, "branch_sat_preview"), dpi=200)
-        save(fig, os.path.join(FIGDIR, "branch_sat"))
-        print("wrote:", os.path.join(FIGDIR, "branch_sat.pdf"))
+        preview(fig, os.path.join(FIGDIR, f"branch_sat{SUFFIX}_preview"), dpi=200)
+        save(fig, os.path.join(FIGDIR, f"branch_sat{SUFFIX}"))
+        print("wrote:", os.path.join(FIGDIR, f"branch_sat{SUFFIX}.pdf"))
 
     # --- OA intake: the isolation evidence ----------------------------------
     # Commanded outdoor-air mass flow (mean per air loop), full week, y from 0.
@@ -159,9 +161,9 @@ def main() -> None:
         ax.set_ylabel("OA flow (kg/s / loop)")
         ax.legend(loc="upper left", ncol=3, frameon=False, fontsize=7.5)
         fig.tight_layout()
-        preview(fig, os.path.join(FIGDIR, "branch_oa_flow_preview"), dpi=200)
-        save(fig, os.path.join(FIGDIR, "branch_oa_flow"))
-        print("wrote:", os.path.join(FIGDIR, "branch_oa_flow.pdf"))
+        preview(fig, os.path.join(FIGDIR, f"branch_oa_flow{SUFFIX}_preview"), dpi=200)
+        save(fig, os.path.join(FIGDIR, f"branch_oa_flow{SUFFIX}"))
+        print("wrote:", os.path.join(FIGDIR, f"branch_oa_flow{SUFFIX}.pdf"))
 
     # --- SAT vs outdoor scatter: the "OA modulation" picture ----------------
     # Each point is one step of the week. The RBCs' outdoor-reset law shows as
@@ -189,9 +191,9 @@ def main() -> None:
     for h in leg.legend_handles:
         h.set_alpha(1.0)
     fig.tight_layout()
-    preview(fig, os.path.join(FIGDIR, "branch_sat_vs_outdoor_preview"), dpi=200)
-    save(fig, os.path.join(FIGDIR, "branch_sat_vs_outdoor"))
-    print("wrote:", os.path.join(FIGDIR, "branch_sat_vs_outdoor.pdf"))
+    preview(fig, os.path.join(FIGDIR, f"branch_sat_vs_outdoor{SUFFIX}_preview"), dpi=200)
+    save(fig, os.path.join(FIGDIR, f"branch_sat_vs_outdoor{SUFFIX}"))
+    print("wrote:", os.path.join(FIGDIR, f"branch_sat_vs_outdoor{SUFFIX}.pdf"))
 
     for b in branches:
         print(f"  {b:12s} cum comfort {float(np.sum(d[f'{b}/comfort'])):9.1f}"

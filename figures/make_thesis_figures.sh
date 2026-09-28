@@ -213,6 +213,31 @@ EOF
          --reference-label "Default RBC" --prefix emed_fromscratch_2p6y_vs_5y
   fi
 
+  # --- "clamped OA" section: ventilation enforced --------------------------
+  if [ -s data/emed_oafloor_fullyear_eval.csv ]; then
+    echo "== retrained WITH the OA floor (5.1y) vs energy-tuned RBC, unconstrained twin overlaid (test) =="
+    $PY - <<'EOF'
+import csv, json
+d = {r["building_id"]: float(r["episode_return"])
+     for r in csv.DictReader(open("data/emed_fromscratch_5y_test_fullyear_eval.csv"))}
+json.dump(d, open("data/_fromscratch_5y_overlay.json", "w"))
+EOF
+    port --eval-csv data/emed_oafloor_fullyear_eval.csv \
+         --baseline-csv data/_default_baseline_emed.csv \
+         --ceiling-json data/_emedtuned_ceiling.json --ceiling-label "Energy-tuned RBC" \
+         --ceiling2-json data/_fromscratch_5y_overlay.json --ceiling2-label "PPO (5.1 y), unconstrained" \
+         --ours-label "PPO (5.1 y), trained with OA floor" \
+         --reference-label "Default RBC" --prefix emed_oafloor_vs_5y
+  fi
+  if [ -s data/emed_fromscratch_5y_oaclamp_fullyear_eval.csv ]; then
+    echo "== OfficeMedium ladder: unconstrained / clamped at eval / trained with floor / tuned RBC =="
+    $PY figures/build_oa_clamp_figure.py
+  fi
+  if [ -s data/branch_compare_OfficeMedium_test0_oaclamp.npz ]; then
+    echo "== branched one-week rollout with the OA clamp (mechanism, clamped) =="
+    $PY figures/build_branch_compare_figure.py data/branch_compare_OfficeMedium_test0_oaclamp.npz 3 _oaclamp "PPO (5.1 y), OA clamped"
+  fi
+
   echo "== energy-tuned RBC vs default RBC (energy-section opener) =="
   port --eval-csv data/emedtuned_rbc_test_fullyear_eval.csv \
        --baseline-csv data/_default_baseline_emed.csv \
