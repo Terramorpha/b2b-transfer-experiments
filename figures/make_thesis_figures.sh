@@ -163,9 +163,19 @@ with open("data/_default_baseline_emed.csv", "w", newline="") as f:
         for t in TYPES:
             if bid.startswith(t): w.writerow([t, bid, v])
 EOF
-  # (emed_ppoft figure DROPPED 2026-08-07 by user decision: complicated
-  #  4-stage lineage, superseded results; the anchoring finding lives in text.
-  #  Its eval CSV data/emed_ppoft_test_fullyear_eval.csv stays for the record.)
+  # emed_ppoft (y2 DAgger -> critic year -> PPO under energy pricing, test) was
+  # DROPPED from this driver 2026-08-07 (4-stage lineage, superseded results) but
+  # the mémoire still links figures_out/emed_ppoft_port_preview.svg, so it is
+  # rebuilt here with the same bars as the other energy panels. Remove the
+  # org link and this block together.
+  if [ -s data/emed_ppoft_test_fullyear_eval.csv ]; then
+    echo "== emed ppoft (y2 -> critic -> PPO) vs default + energy-tuned RBC (test) =="
+    port --eval-csv data/emed_ppoft_test_fullyear_eval.csv \
+         --baseline-csv data/_default_baseline_emed.csv \
+         --ceiling-json data/_emedtuned_ceiling.json \
+         --ceiling-label "Energy-tuned RBC" --ours-label "Ours (PPO, energy)" \
+         --reference-label "Default RBC" --prefix emed_ppoft
+  fi
 
   if [ -s data/emed_fromscratch_test_fullyear_eval.csv ]; then
     echo "== from-scratch PPO vs energy-tuned RBC (test) =="
