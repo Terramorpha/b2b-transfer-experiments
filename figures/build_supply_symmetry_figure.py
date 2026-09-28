@@ -21,7 +21,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pub_style import apply_pub_style, save, INK, W_E_COLORS, COLWIDTH_IN
+from pub_style import apply_pub_style, preview, save, INK, W_E_COLORS, COLWIDTH_IN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -75,8 +75,7 @@ def main() -> None:
     ax.legend(loc="upper left", frameon=False, fontsize=8)
 
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGDIR, f"{STEM}_preview.png"),
-                dpi=200, bbox_inches="tight", facecolor="white")
+    preview(fig, os.path.join(FIGDIR, f"{STEM}_preview"), dpi=200)
     save(fig, os.path.join(FIGDIR, STEM))
     print("wrote:", os.path.join(FIGDIR, f"{STEM}.pdf"))
     print("nodes:", *node_ids, sep="\n  ")

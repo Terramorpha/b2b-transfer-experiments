@@ -219,3 +219,14 @@ def save(fig, path: str | Path) -> None:
             path.with_suffix(suffix), bbox_inches="tight", pad_inches=0.02, transparent=True
         )
     plt.close(fig)
+
+
+def preview(fig, path: str | Path, dpi: int = 200) -> None:
+    """Quick-look twin of a figure on an opaque white background: ``<path>.png``
+    (raster, for org-mode inline display) **and** ``<path>.svg`` (vector, same
+    bbox) so every figure the mémoire links exists in SVG. Does not close the
+    figure; call :func:`save` afterwards for the transparent thesis PDF/SVG."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in (".png", ".svg"):
+        fig.savefig(path.with_suffix(suffix), dpi=dpi, bbox_inches="tight", facecolor="white")

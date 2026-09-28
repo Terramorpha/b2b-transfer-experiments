@@ -23,7 +23,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pub_style import apply_pub_style, save, INK, W_E_COLORS, REACTIVE_COLOR, \
+from pub_style import apply_pub_style, preview, save, INK, W_E_COLORS, REACTIVE_COLOR, \
     COLWIDTH_IN, TEXTWIDTH_IN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -74,8 +74,7 @@ def main() -> None:
         ax.set_ylabel(ylabel)
         ax.legend(loc="upper left", frameon=False, fontsize=7.5)
         fig.tight_layout()
-        fig.savefig(os.path.join(FIGDIR, f"{stem}_preview.png"), dpi=200,
-                    bbox_inches="tight", facecolor="white")
+        preview(fig, os.path.join(FIGDIR, f"{stem}_preview"), dpi=200)
         save(fig, os.path.join(FIGDIR, stem))
         print("wrote:", os.path.join(FIGDIR, f"{stem}.pdf"))
 
@@ -105,8 +104,7 @@ def main() -> None:
     ax.set_ylim(lo, hi + 0.42 * (hi - lo))  # headroom so the legend clears the data
     ax.legend(loc="upper left", ncol=3, frameon=False, fontsize=7.5)
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGDIR, "branch_traces_preview.png"), dpi=200,
-                bbox_inches="tight", facecolor="white")
+    preview(fig, os.path.join(FIGDIR, "branch_traces_preview"), dpi=200)
     save(fig, os.path.join(FIGDIR, "branch_traces"))
     print("wrote:", os.path.join(FIGDIR, "branch_traces.pdf"))
 
@@ -126,8 +124,7 @@ def main() -> None:
         ax.set_ylabel("Mean commanded SAT (°C)")
         ax.legend(loc="upper left", ncol=3, frameon=False, fontsize=7.5)
         fig.tight_layout()
-        fig.savefig(os.path.join(FIGDIR, "branch_sat_preview.png"), dpi=200,
-                    bbox_inches="tight", facecolor="white")
+        preview(fig, os.path.join(FIGDIR, "branch_sat_preview"), dpi=200)
         save(fig, os.path.join(FIGDIR, "branch_sat"))
         print("wrote:", os.path.join(FIGDIR, "branch_sat.pdf"))
 
@@ -162,8 +159,7 @@ def main() -> None:
         ax.set_ylabel("OA flow (kg/s / loop)")
         ax.legend(loc="upper left", ncol=3, frameon=False, fontsize=7.5)
         fig.tight_layout()
-        fig.savefig(os.path.join(FIGDIR, "branch_oa_flow_preview.png"),
-                    dpi=200, bbox_inches="tight", facecolor="white")
+        preview(fig, os.path.join(FIGDIR, "branch_oa_flow_preview"), dpi=200)
         save(fig, os.path.join(FIGDIR, "branch_oa_flow"))
         print("wrote:", os.path.join(FIGDIR, "branch_oa_flow.pdf"))
 
@@ -193,8 +189,7 @@ def main() -> None:
     for h in leg.legend_handles:
         h.set_alpha(1.0)
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGDIR, "branch_sat_vs_outdoor_preview.png"),
-                dpi=200, bbox_inches="tight", facecolor="white")
+    preview(fig, os.path.join(FIGDIR, "branch_sat_vs_outdoor_preview"), dpi=200)
     save(fig, os.path.join(FIGDIR, "branch_sat_vs_outdoor"))
     print("wrote:", os.path.join(FIGDIR, "branch_sat_vs_outdoor.pdf"))
 

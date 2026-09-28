@@ -20,7 +20,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pub_style import apply_pub_style, save, INK, REACTIVE_COLOR, W_E_COLORS, TEXTWIDTH_IN
+from pub_style import apply_pub_style, preview, save, INK, REACTIVE_COLOR, W_E_COLORS, TEXTWIDTH_IN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -78,8 +78,7 @@ def main() -> None:
     axes[0].legend(loc="upper left", ncol=3, frameon=False, fontsize=8)
 
     fig.tight_layout()
-    fig.savefig(os.path.join(FIGDIR, "sat_vs_setpoint_preview.png"),
-                dpi=200, bbox_inches="tight", facecolor="white")
+    preview(fig, os.path.join(FIGDIR, "sat_vs_setpoint_preview"), dpi=200)
     save(fig, os.path.join(FIGDIR, "sat_vs_setpoint"))
     print("wrote:", os.path.join(FIGDIR, "sat_vs_setpoint.pdf"))
     print("preview:", os.path.join(FIGDIR, "sat_vs_setpoint_preview.png"))

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from pub_style import (apply_pub_style, barh_axes, grouped_barh, save,
+from pub_style import (apply_pub_style, preview, barh_axes, grouped_barh, save,
                        REACTIVE_COLOR, W_E_COLORS, TEXTWIDTH_IN)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -176,8 +176,7 @@ def main() -> None:
                    bbox_to_anchor=(0.5, 1.0))
     else:
         fig.tight_layout()
-    fig.savefig(os.path.join(figdir, f"{prefix}_port_preview.png"),  # quick-look raster
-                dpi=200, bbox_inches="tight", facecolor="white")
+    preview(fig, os.path.join(figdir, f"{prefix}_port_preview"), dpi=200)
     save(fig, os.path.join(figdir, f"{prefix}_combined"))  # transparent PDF, closes fig
 
     print("per-panel PDFs:", sorted(f for f in os.listdir(figdir) if f.endswith(".pdf")))

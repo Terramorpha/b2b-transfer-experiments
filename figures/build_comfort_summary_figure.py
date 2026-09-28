@@ -25,7 +25,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pub_style import apply_pub_style, save, TEXTWIDTH_IN, INK
+from pub_style import apply_pub_style, preview, save, TEXTWIDTH_IN, INK
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -118,8 +118,7 @@ def main() -> None:
     ax.set_ylabel("Return / untuned-RBC return")
     ax.set_ylim(0, 2.45)   # headroom so the upper-left legend clears the tallest bar
     ax.legend(loc="upper left", ncol=2)
-    fig.savefig(os.path.join(REPO, "figures_out", "comfort_summary_preview.png"),
-                dpi=170, bbox_inches="tight", facecolor="white")  # quick-look raster
+    preview(fig, os.path.join(REPO, "figures_out", "comfort_summary_preview"), dpi=170)
     save(fig, os.path.join(REPO, "figures_out", "comfort_summary"))
     print("wrote figures_out/comfort_summary.pdf (+_preview.png)")
     for name, _f, _c in series:
