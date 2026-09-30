@@ -34,11 +34,11 @@ dependencies = [
 package = false
 
 [tool.uv.sources]
-morel = { git = "ssh://git@github.com/Terramorpha/morel", rev = "79bb42d8d3bd7dde5d5d89693a601d63ffd6bcb8" }
-morel-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "79bb42d8d3bd7dde5d5d89693a601d63ffd6bcb8", subdirectory = "third_party/morel_amorpheus" }
-morel-b2b = { git = "ssh://git@github.com/Terramorpha/morel", rev = "79bb42d8d3bd7dde5d5d89693a601d63ffd6bcb8", subdirectory = "third_party/morel_b2b" }
-morel-b2b-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "79bb42d8d3bd7dde5d5d89693a601d63ffd6bcb8", subdirectory = "third_party/morel_b2b_amorpheus" }
-morel-b2b-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "79bb42d8d3bd7dde5d5d89693a601d63ffd6bcb8", subdirectory = "third_party/morel_b2b_modumorph" }
-morel-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "79bb42d8d3bd7dde5d5d89693a601d63ffd6bcb8", subdirectory = "third_party/morel_modumorph" }
-building2building = { git = "ssh://git@github.com/vtaboga/Building2Building", rev = "6f75f4d8cedbd98eaa9e9cf6df2f533cc81ffac2" }
+morel = { git = "ssh://git@github.com/Terramorpha/morel", rev = "280b34cbad7a0295c985fb984bace663bd8cde45" }
+morel-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "280b34cbad7a0295c985fb984bace663bd8cde45", subdirectory = "third_party/morel_amorpheus" }
+morel-b2b = { git = "ssh://git@github.com/Terramorpha/morel", rev = "280b34cbad7a0295c985fb984bace663bd8cde45", subdirectory = "third_party/morel_b2b" }
+morel-b2b-amorpheus = { git = "ssh://git@github.com/Terramorpha/morel", rev = "280b34cbad7a0295c985fb984bace663bd8cde45", subdirectory = "third_party/morel_b2b_amorpheus" }
+morel-b2b-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "280b34cbad7a0295c985fb984bace663bd8cde45", subdirectory = "third_party/morel_b2b_modumorph" }
+morel-modumorph = { git = "ssh://git@github.com/Terramorpha/morel", rev = "280b34cbad7a0295c985fb984bace663bd8cde45", subdirectory = "third_party/morel_modumorph" }
+building2building = { git = "ssh://git@github.com/vtaboga/Building2Building", rev = "5d63e5d4e1b2a6f1d06e438b9594d05bc351ad8b" }
 minergym = { git = "ssh://git@github.com/Terramorpha/minergym", rev = "1cc47dea940119e718d140c09966254a1f8d4105" }
